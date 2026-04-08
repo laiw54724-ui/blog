@@ -1,0 +1,21 @@
+{
+  "name": "@personal-blog/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.8",
+    "@astrojs/cloudflare": "^13.1.7",
+    "@astrojs/underscore-redirects": "^1.0.3",
+    "@personal-blog/shared": "*",
+    "astro": "^6.1.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,171 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { getPosts } from '../lib/data'
+import { formatDate } from '@personal-blog/shared'
+import { applyPageCacheHeaders } from '../lib/response'
+
+// SSR: 每次請求時取最新資料
+const posts = await getPosts()
+
+// 應用快取策略：30秒 CDN 快取 + 2 分鐘過期後仍可用
+applyPageCacheHeaders(Astro.response, 'stream')
+---
+
+<BaseLayout title="動態 | Double River" description="像社群河道一樣，收納當下的片段。">
+  <div class="stream-container">
+    <header class="stream-header">
+      <h1>動態流</h1>
+      <p>日常短記、書摘、旅途感想、評論</p>
+    </header>
+
+    <div class="posts-list">
+      {
+        posts.length > 0 ? (
+          posts.map((post) => (
+            <article class="post-card">
+              <a href={`/post/${post.slug}`}>
+                <div class="post-meta">
+                  <time datetime={post.created_at}>
+                    {formatDate(post.created_at)}
+                  </time>
+                  <span class="category">{post.category}</span>
+                </div>
+                <h2>{post.title}</h2>
+                {post.excerpt && <p class="excerpt">{post.excerpt}</p>}
+              </a>
+            </article>
+          ))
+        ) : (
+          <p class="empty-state">還沒有任何貼文</p>
+        )
+      }
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .stream-container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .stream-header {
+    margin-bottom: 3rem;
+  }
+
+  .stream-header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .stream-header p {
+    color: #666;
+    font-size: 1.1rem;
+  }
+
+  .posts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .post-card {
+    padding: 1.5rem;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+
+  .post-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: #ddd;
+  }
+
+  .post-header {
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+
+  .post-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+  }
+
+  .post-header a {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .post-header a:hover {
+    text-decoration: underline;
+  }
+
+  .post-header time {
+    font-size: 0.9rem;
+    color: #999;
+    white-space: nowrap;
+  }
+
+  .post-meta {
+    margin-bottom: 1rem;
+  }
+
+  .category {
+    display: inline-block;
+    background: #f0f0f0;
+    padding: 0.3rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #666;
+  }
+
+  .excerpt {
+    margin: 0.8rem 0 0;
+    color: #555;
+    line-height: 1.5;
+  }
+
+  .read-more {
+    color: #0066cc;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .read-more:hover {
+    color: #0052a3;
+  }
+
+  .error-message {
+    background: #fee;
+    color: #c00;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 2rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: #999;
+    padding: 2rem;
+  }
+
+  @media (max-width: 640px) {
+    .stream-container {
+      padding: 1rem;
+    }
+
+    .post-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .stream-header h1 {
+      font-size: 1.5rem;
+    }
+  }
+</style>

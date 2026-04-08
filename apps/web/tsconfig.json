@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "jsxImportSource": "astro/jsx",
+    "jsx": "react-jsx",
+    "strict": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}

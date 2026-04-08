@@ -1,0 +1,10 @@
+name = "personal-blog-web"
+compatibility_date = "2026-04-07"
+
+[vars]
+PUBLIC_API_URL = "https://personal-blog-api.personal-blog.workers.dev"
+
+# Service binding to API worker (avoids Worker-to-Worker fetch 404 issue)
+[[services]]
+binding = "API_SERVICE"
+service = "personal-blog-api"

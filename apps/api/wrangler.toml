@@ -1,0 +1,20 @@
+name = "personal-blog-api"
+type = "service"
+main = "src/index.ts"
+compatibility_date = "2024-04-05"
+
+[env.production]
+name = "personal-blog-api"
+routes = [
+  { pattern = "api.example.com/*", zone_id = "" }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "personal-blog"
+database_id = "0f871179-2302-42be-a614-8f96e1692766"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "personal-blog"
+database_id = "0f871179-2302-42be-a614-8f96e1692766"

@@ -1,0 +1,257 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import ReaderControls from '../../components/ReaderControls.astro'
+import { formatDate } from '@personal-blog/shared'
+import { renderMarkdownToHtml } from '../../lib/markdown'
+import { getArticles, getEntryBySlug } from '../../lib/data'
+import { applyPageCacheHeaders } from '../../lib/response'
+
+
+interface Props {
+  slug: string
+}
+
+export async function getStaticPaths() {
+  const articles = await getArticles()
+  return articles.map((article) => ({
+    params: { slug: article.slug },
+    props: { slug: article.slug },
+  }))
+}
+
+const { slug } = Astro.props
+
+// SSR: 每次請求時取最新資料
+const entry = slug ? await getEntryBySlug(slug) : null
+
+if (!entry) {
+  return Astro.redirect('/articles')
+}
+
+const renderedContent = await renderMarkdownToHtml(entry.content_markdown)
+
+// 應用快取策略：10分鐘 CDN 快取 + 1小時過期後仍可用
+applyPageCacheHeaders(Astro.response, 'detail')
+---
+
+<BaseLayout title={`${entry.title} | Double River`}>
+  <ReaderControls client:load />
+  <article class="article">
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime={entry.created_at}>{formatDate(entry.created_at)}</time>
+        {entry.category && (
+          <span class="category">{entry.category}</span>
+        )}
+      </div>
+      <h1>{entry.title}</h1>
+      {entry.excerpt && <p class="excerpt">{entry.excerpt}</p>}
+    </header>
+
+    <div class="article-content">
+      <div class="markdown-content" set:html={renderedContent} />
+    </div>
+
+    <footer class="article-footer">
+      <nav class="article-nav">
+        <a href="/articles" class="btn-back">← 返回文章</a>
+        {entry.category && (
+          <a href={`/${entry.category}`} class="btn-category">
+            查看此分類
+          </a>
+        )}
+      </nav>
+    </footer>
+  </article>
+</BaseLayout>
+
+<style>
+  article.article {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1.5rem 0;
+  }
+
+  .article-header {
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e8e2d9;
+  }
+
+  .article-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: #999;
+    margin-bottom: 0.75rem;
+  }
+
+  .category {
+    color: #0066cc;
+  }
+
+  .article-header h1 {
+    font-size: 1.85rem;
+    line-height: 1.4;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+
+  .excerpt {
+    font-size: 1.05rem;
+    color: #666;
+    line-height: 1.7;
+  }
+
+  .article-content {
+    font-size: 1.1rem;
+    line-height: 2;
+    color: #333;
+    margin: 2rem 0;
+  }
+
+  .markdown-content {
+    font-size: 1.1rem;
+    line-height: 2;
+    color: #333;
+  }
+
+  .markdown-content p {
+    margin-bottom: 1.5rem;
+  }
+
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3,
+  .markdown-content h4,
+  .markdown-content h5,
+  .markdown-content h6 {
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #1d1d1f;
+  }
+
+  .markdown-content h1 { font-size: 1.6rem; }
+  .markdown-content h2 { font-size: 1.4rem; }
+  .markdown-content h3 { font-size: 1.25rem; }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    margin: 1rem 0 1.5rem 1.5rem;
+  }
+
+  .markdown-content li {
+    margin-bottom: 0.5rem;
+  }
+
+  .markdown-content code {
+    background: #f4f4f4;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+  }
+
+  .markdown-content pre {
+    background: #f8f8f8;
+    border-left: 3px solid #ddd;
+    padding: 1rem 1.25rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+  }
+
+  .markdown-content pre code {
+    background: none;
+    padding: 0;
+  }
+
+  .markdown-content blockquote {
+    border-left: 3px solid #ddd;
+    padding-left: 1.25rem;
+    margin: 1.5rem 0;
+    color: #666;
+  }
+
+  .markdown-content a {
+    color: #0066cc;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+  }
+
+  .markdown-content a:hover {
+    text-decoration-style: solid;
+  }
+
+  .markdown-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin: 1.5rem 0;
+  }
+
+  .markdown-content hr {
+    border: none;
+    border-top: 1px solid #e8e2d9;
+    margin: 2rem 0;
+  }
+
+  .article-footer {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e8e2d9;
+  }
+
+  .article-nav {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-back,
+  .btn-category {
+    display: inline-block;
+    padding: 0.6rem 1.25rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+  }
+
+  .btn-back {
+    background: #f0f0f0;
+    color: #333;
+  }
+
+  .btn-back:hover {
+    background: #e0e0e0;
+  }
+
+  .btn-category {
+    background: #0066cc;
+    color: white;
+  }
+
+  .btn-category:hover {
+    background: #0052a3;
+  }
+
+  @media (max-width: 640px) {
+    .article-header h1 {
+      font-size: 1.5rem;
+    }
+
+    .article-nav {
+      flex-direction: column;
+    }
+
+    .btn-back,
+    .btn-category {
+      width: 100%;
+      text-align: center;
+    }
+  }
+</style>

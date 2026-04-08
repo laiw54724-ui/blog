@@ -1,0 +1,138 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { getEntriesByCategory } from '../lib/data'
+import { formatDate } from '@personal-blog/shared'
+import { applyPageCacheHeaders } from '../lib/response'
+
+export async function getStaticPaths() {
+  const categories = ['journal', 'reading', 'travel', 'place']
+  return categories.map((category) => ({
+    params: { category },
+  }))
+}
+
+const { category } = Astro.params
+const categoryLabels: Record<string, string> = {
+  journal: '日記',
+  reading: '讀書',
+  travel: '旅行',
+  place: '地點',
+}
+
+let entries: any[] = []
+let error = null
+
+try {
+  entries = await getEntriesByCategory(category || '')
+} catch (e) {
+  error = '無法載入內容，請稍後重試'
+}
+
+applyPageCacheHeaders(Astro.response, 'articles')
+---
+
+<BaseLayout title={categoryLabels[category || '']}>
+  <div class="category-container">
+    <header class="category-header">
+      <h1>{categoryLabels[category || '']}</h1>
+    </header>
+
+    {error && <div class="error-message">{error}</div>}
+
+    <div class="entries-list">
+      {
+        entries.length > 0 ? (
+          entries.map((entry) => (
+            <div class="entry-item">
+              <h2>
+                <a
+                  href={`/${
+                    entry.entry_type === 'article' ? 'article' : 'post'
+                  }/${entry.slug}`}
+                >
+                  {entry.title}
+                </a>
+              </h2>
+              <time datetime={entry.created_at}>
+                {formatDate(entry.created_at)}
+              </time>
+              {entry.excerpt && <p class="excerpt">{entry.excerpt}</p>}
+            </div>
+          ))
+        ) : (
+          <p class="empty-state">這個分類還沒有內容</p>
+        )
+      }
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .category-container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .category-header {
+    margin-bottom: 3rem;
+  }
+
+  .category-header h1 {
+    font-size: 2rem;
+  }
+
+  .entries-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .entry-item {
+    padding-bottom: 2rem;
+    border-bottom: 1px solid #eee;
+  }
+
+  .entry-item:last-child {
+    border-bottom: none;
+  }
+
+  .entry-item h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.3rem;
+  }
+
+  .entry-item a {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .entry-item a:hover {
+    text-decoration: underline;
+  }
+
+  .entry-item time {
+    color: #999;
+    font-size: 0.9rem;
+  }
+
+  .excerpt {
+    margin: 0.8rem 0 0;
+    color: #555;
+    line-height: 1.6;
+  }
+
+  .error-message {
+    background: #fee;
+    color: #c00;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 2rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: #999;
+    padding: 2rem;
+  }
+</style>

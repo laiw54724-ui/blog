@@ -1,0 +1,171 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { getArticles } from '../lib/data'
+import { formatDate } from '@personal-blog/shared'
+import { applyPageCacheHeaders } from '../lib/response'
+
+// SSR: 每次請求時取最新資料
+const articles = await getArticles()
+
+// 應用快取策略：5分鐘 CDN 快取 + 30分鐘過期後仍可用
+applyPageCacheHeaders(Astro.response, 'articles')
+---
+
+<BaseLayout title="文章 | Double River" description="整理過、值得回頭找的長文與評論。">
+  <div class="articles-container">
+    <header class="articles-header">
+      <h1>文章流</h1>
+      <p>整理過的評論、旅記、讀書心得、長篇日記</p>
+    </header>
+
+    <div class="articles-grid">
+      {
+        articles.length > 0 ? (
+          articles.map((article) => (
+            <article class="article-card">
+              <a href={`/article/${article.slug}`}>
+                <div class="article-meta">
+                  <time datetime={article.created_at}>
+                    {formatDate(article.created_at)}
+                  </time>
+                  <span class="category">{article.category}</span>
+                </div>
+                <h2>{article.title}</h2>
+                {article.excerpt && (
+                  <p class="excerpt">{article.excerpt}</p>
+                )}
+              </a>
+            </article>
+          ))
+        ) : (
+          <p class="empty-state">還沒有任何文章</p>
+        )
+      }
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .articles-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .articles-header {
+    margin-bottom: 3rem;
+  }
+
+  .articles-header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .articles-header p {
+    color: #666;
+    font-size: 1.1rem;
+  }
+
+  .articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 2rem;
+  }
+
+  .article-card {
+    border: 1px solid #eee;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s;
+  }
+
+  .article-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: #ddd;
+    transform: translateY(-2px);
+  }
+
+  .article-content {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .article-card h2 {
+    margin: 0 0 0.8rem;
+    font-size: 1.2rem;
+  }
+
+  .article-card a {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .article-card a:hover {
+    text-decoration: underline;
+  }
+
+  .article-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+    font-size: 0.9rem;
+    color: #666;
+  }
+
+  .category {
+    background: #f0f0f0;
+    padding: 0.3rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+
+  .excerpt {
+    margin: 0;
+    color: #555;
+    line-height: 1.5;
+    flex-grow: 1;
+  }
+
+  .read-more {
+    margin-top: 1rem;
+    color: #0066cc;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .read-more:hover {
+    color: #0052a3;
+  }
+
+  .error-message {
+    background: #fee;
+    color: #c00;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 2rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: #999;
+    padding: 3rem;
+    grid-column: 1 / -1;
+  }
+
+  @media (max-width: 640px) {
+    .articles-container {
+      padding: 1rem;
+    }
+
+    .articles-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .articles-header h1 {
+      font-size: 1.5rem;
+    }
+  }
+</style>

@@ -1,0 +1,242 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { getPosts, getArticles } from '../lib/data'
+import { formatDate } from '@personal-blog/shared'
+import { applyPageCacheHeaders } from '../lib/response'
+
+// SSR: 每次請求時取最新資料
+const [allPosts, allArticles] = await Promise.all([
+  getPosts(),
+  getArticles(),
+])
+
+const latestPosts = allPosts.slice(0, 5)
+const latestArticles = allArticles.slice(0, 5)
+
+// 首頁應用 stream 級別的快取（短快取）
+applyPageCacheHeaders(Astro.response, 'stream')
+---
+
+<BaseLayout title="Double River" description="動態留下當下，文章留下價值。">
+  <section class="hero">
+    <h1>個人園地</h1>
+    <p>記錄每一刻的想法、旅程與發現</p>
+    <div class="cta-group">
+      <a href="/stream" class="btn btn-primary">看最新動態</a>
+      <a href="/articles" class="btn btn-secondary">看整理文章</a>
+    </div>
+  </section>
+
+  <section class="home-feed">
+    <div class="feed-column">
+      <h2>最新動態</h2>
+      <div class="feed-list">
+        {
+          latestPosts.length > 0 ? (
+            latestPosts.map((post) => (
+              <a href={`/post/${post.slug}`} class="feed-item">
+                <h3>{post.title}</h3>
+                <time>{formatDate(post.created_at)}</time>
+              </a>
+            ))
+          ) : (
+            <p>還沒有動態</p>
+          )
+        }
+      </div>
+      <a href="/stream" class="view-all">查看全部 →</a>
+    </div>
+
+    <div class="feed-column">
+      <h2>最新文章</h2>
+      <div class="feed-list">
+        {
+          latestArticles.length > 0 ? (
+            latestArticles.map((article) => (
+              <a href={`/article/${article.slug}`} class="feed-item">
+                <h3>{article.title}</h3>
+                <time>{formatDate(article.created_at)}</time>
+              </a>
+            ))
+          ) : (
+            <p>還沒有文章</p>
+          )
+        }
+      </div>
+      <a href="/articles" class="view-all">查看全部 →</a>
+    </div>
+  </section>
+
+  <section class="categories">
+    <h2>探索</h2>
+    <div class="category-grid">
+      <a href="/journal" class="category-card">
+        <h3>📓 日記</h3>
+        <p>日常思考與感受</p>
+      </a>
+      <a href="/reading" class="category-card">
+        <h3>📚 讀書</h3>
+        <p>書籍與想法</p>
+      </a>
+      <a href="/travel" class="category-card">
+        <h3>✈️ 旅行</h3>
+        <p>世界的故事</p>
+      </a>
+      <a href="/place" class="category-card">
+        <h3>☕ 地點</h3>
+        <p>咖啡廳與餐廳</p>
+      </a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    text-align: center;
+    padding: 4rem 2rem;
+  }
+
+  .hero h1 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+
+  .hero p {
+    font-size: 1.2rem;
+    color: #666;
+    margin-bottom: 2rem;
+  }
+
+  .cta-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .home-feed {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+    gap: 3rem;
+  }
+
+  .feed-column h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .feed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .feed-item {
+    padding: 1rem;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #000;
+    transition: all 0.2s;
+  }
+
+  .feed-item:hover {
+    border-color: #ddd;
+    background: #fafafa;
+  }
+
+  .feed-item h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+  }
+
+  .feed-item time {
+    font-size: 0.85rem;
+    color: #999;
+  }
+
+  .view-all {
+    color: #0066cc;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .view-all:hover {
+    text-decoration: underline;
+  }
+
+  .categories {
+    padding: 3rem 2rem;
+    background: #f9f9f9;
+  }
+
+  .categories h2 {
+    text-align: center;
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2rem;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .category-card {
+    padding: 2rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    text-decoration: none;
+    background: white;
+    transition: all 0.2s;
+  }
+
+  .category-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .category-card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.3rem;
+  }
+
+  .category-card p {
+    margin: 0;
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  .error-message {
+    background: #fee;
+    color: #c00;
+    padding: 1rem;
+    margin: 2rem;
+    border-radius: 4px;
+    max-width: 1000px;
+  }
+
+  @media (max-width: 768px) {
+    .home-feed {
+      grid-template-columns: 1fr;
+      padding: 2rem 1rem;
+    }
+
+    .hero h1 {
+      font-size: 2rem;
+    }
+
+    .cta-group {
+      flex-direction: column;
+    }
+
+    .category-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>

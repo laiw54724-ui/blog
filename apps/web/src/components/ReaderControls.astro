@@ -1,0 +1,144 @@
+---
+// ReaderControls.astro - 閱讀器模式控制元件（Island）
+---
+
+<div class="reader-controls">
+  <button class="font-btn" data-action="decrease" title="縮小字體">
+    A<sub>−</sub>
+  </button>
+  <button class="font-btn" data-action="reset" title="重置字體">A</button>
+  <button class="font-btn" data-action="increase" title="放大字體">
+    A<sup>+</sup>
+  </button>
+</div>
+
+<style>
+  .reader-controls {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 8px;
+    z-index: 98;
+    background: white;
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .font-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #666;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .font-btn:hover {
+    border-color: #0066cc;
+    color: #0066cc;
+    background: #f0f7ff;
+  }
+
+  .font-btn:active {
+    background: #e0ebf7;
+  }
+
+  .font-btn sub,
+  .font-btn sup {
+    font-size: 0.65rem;
+  }
+
+  @media (max-width: 768px) {
+    .reader-controls {
+      top: auto;
+      bottom: 1.25rem;
+      right: 1rem;
+      gap: 6px;
+      padding: 6px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .font-btn {
+      width: 32px;
+      height: 32px;
+      font-size: 0.8rem;
+    }
+  }
+</style>
+
+<script>
+  class ReaderControls {
+    baseSize = 1.1; // rem
+    currentSize = 1.1;
+    storageKey = 'blog-font-size';
+    minSize = 0.9;
+    maxSize = 1.4;
+
+    constructor() {
+      this.loadSavedSize();
+      this.init();
+    }
+
+    init() {
+      const buttons = document.querySelectorAll<HTMLButtonElement>('.font-btn');
+      buttons.forEach((btn) => {
+        btn.addEventListener('click', (e: Event) => this.handleFontChange(e));
+      });
+
+      this.applyFontSize();
+    }
+
+    handleFontChange(e: Event) {
+      const target = e.target as HTMLElement | null;
+      const action = target?.closest<HTMLElement>('[data-action]')?.dataset.action;
+
+      switch (action) {
+        case 'increase':
+          this.currentSize = Math.min(this.maxSize, this.currentSize + 0.05);
+          break;
+        case 'decrease':
+          this.currentSize = Math.max(this.minSize, this.currentSize - 0.05);
+          break;
+        case 'reset':
+          this.currentSize = this.baseSize;
+          break;
+      }
+
+      this.applyFontSize();
+      this.saveFontSize();
+    }
+
+    applyFontSize() {
+      const article = document.querySelector<HTMLElement>('article');
+      if (!article) return;
+
+      article.style.fontSize = `${this.currentSize}rem`;
+      const lineHeight = 1.8 + (this.currentSize - 1.1) * 0.2;
+      article.style.lineHeight = `${lineHeight}`;
+    }
+
+    saveFontSize() {
+      localStorage.setItem(this.storageKey, this.currentSize.toFixed(2));
+    }
+
+    loadSavedSize() {
+      const saved = localStorage.getItem(this.storageKey);
+      if (saved) {
+        this.currentSize = parseFloat(saved);
+      }
+    }
+  }
+
+  if (document.querySelector('article')) {
+    new ReaderControls();
+  }
+</script>

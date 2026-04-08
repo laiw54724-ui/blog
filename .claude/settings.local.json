@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"/c/Users/User/Desktop/blog-architecture-pack\" log --oneline -5)",
+      "Bash(cd:*)"
+    ]
+  }
+}

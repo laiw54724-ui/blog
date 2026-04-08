@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx astro:*)",
+      "Bash(npm rebuild:*)",
+      "Read(//c/Users/User/Desktop/**)",
+      "Bash(ls \"/c/Users/User/Desktop/\"*blog*zip*)",
+      "Bash(unzip -l \"/c/Users/User/Desktop/personal-blog-final-20260408-000208.zip\")",
+      "Bash(unzip -o \"/c/Users/User/Desktop/personal-blog-final-20260408-000208.zip\" \"blog-architecture-pack/package-lock.json\" -d /tmp/restore)",
+      "Bash(cp /tmp/restore/blog-architecture-pack/package-lock.json .)",
+      "Bash(unzip -o \"/c/Users/User/Desktop/personal-blog-final-20260408-000208.zip\" 'blog-architecture-pack\\\\package-lock.json' -d /tmp/restore)",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \":*)",
+      "Bash(npx --package=wrangler@4 wrangler deploy --config apps/web/dist/server/wrangler.json)",
+      "Bash(apps/web/node_modules/.bin/wrangler --version)",
+      "Bash(apps/web/node_modules/.bin/wrangler deploy:*)",
+      "Bash(tar xzf:*)",
+      "Bash(mv package:*)",
+      "Bash(rm esbuild-win32-x64-0.27.3.tgz)",
+      "Bash(apps/web/node_modules/@esbuild/win32-x64/esbuild.exe --version)",
+      "Bash(grep -l \"bottom-nav\" apps/web/dist/server/chunks/*.mjs)",
+      "Bash(apps/web/node_modules/.bin/wrangler versions:*)"
+    ]
+  }
+}
