@@ -1,9 +1,9 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro'
-import EntryCard from '../components/EntryCard.astro'
-import { getEntriesByCategory } from '../lib/data'
-import { buildEntryCardModels, CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from '../lib/presenters'
-import { applyPageCacheHeaders } from '../lib/response'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import EntryCard from '../../components/EntryCard.astro'
+import { getEntriesByCategory } from '../../lib/data'
+import { buildEntryCardModels, CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from '../../lib/presenters'
+import { applyPageCacheHeaders } from '../../lib/response'
 
 export async function getStaticPaths() {
   const categories = ['journal', 'reading', 'travel', 'place']
@@ -20,7 +20,7 @@ let cardModels: Awaited<ReturnType<typeof buildEntryCardModels>> = []
 let error: string | null = null
 
 try {
-  const entries = await getEntriesByCategory(category || '')
+  const entries = await getEntriesByCategory(category)
   cardModels = await buildEntryCardModels(entries, {
     categoryLabelOverride: label,
     excerptLength: 120,
