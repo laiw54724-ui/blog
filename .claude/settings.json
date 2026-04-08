@@ -34,7 +34,15 @@
       "Bash(npx tsx:*)",
       "Bash(source .env.local)",
       "Bash(export DISCORD_TOKEN DISCORD_CLIENT_ID DISCORD_GUILD_ID)",
-      "Bash(npx --prefix apps/api wrangler deploy --config apps/api/wrangler.toml)"
+      "Bash(npx --prefix apps/api wrangler deploy --config apps/api/wrangler.toml)",
+      "Bash(node -e \"console.log\\(process.version\\)\")",
+      "Bash(find C:UsersUserDesktopblog-architecture-packnode_modules@cloudflarevite-plugin -name *.d.ts -type f)",
+      "Bash(grep -r \"mode\\\\|pages\" C:UsersUserDesktopblog-architecture-packnode_modules@astrojscloudflare --include=*.js --include=*.ts)",
+      "Bash(winget --version)",
+      "Bash(git -C \"c:/Users/User/Desktop/blog-architecture-pack\" remote -v)",
+      "Read(//c/Users/User/Desktop/blog-architecture-pack/$LOCALAPPDATA/Microsoft/WinGet/Links/**)",
+      "Read(//c/Users/User/Desktop/blog-architecture-pack/$HOME/AppData/Local/**)",
+      "Read(//c/Users/User/Desktop/blog-architecture-pack/**)"
     ]
   }
 }
