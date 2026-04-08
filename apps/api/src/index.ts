@@ -19,6 +19,31 @@ app.post('/api/discord/interactions', handleDiscordInteraction)
 // API routes
 app.route('/api/entries', entriesRouter)
 
+// Serve assets from R2
+app.get('/api/assets/*', async (c: Context) => {
+  const bucket = (c.env as any)?.ASSETS_BUCKET
+  if (!bucket) {
+    return c.json({ error: 'Storage not configured' }, 500)
+  }
+
+  // Extract the storage key from the URL path (everything after /api/assets/)
+  const key = c.req.path.replace('/api/assets/', '')
+  if (!key) {
+    return c.json({ error: 'Missing asset key' }, 400)
+  }
+
+  const object = await bucket.get(key)
+  if (!object) {
+    return c.json({ error: 'Asset not found' }, 404)
+  }
+
+  const headers = new Headers()
+  headers.set('Content-Type', object.httpMetadata?.contentType || 'application/octet-stream')
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+
+  return new Response(object.body, { headers })
+})
+
 // Health check
 app.get('/api/health', (c: Context) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() })

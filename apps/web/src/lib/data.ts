@@ -120,7 +120,7 @@ export async function getArticles(): Promise<Entry[]> {
  * Get entry by slug with type inference
  */
 export async function getEntryBySlug(slug: string): Promise<Entry | null> {
-  const cacheKey = `entry:${slug}`
+  const cacheKey = `entry:detail:${slug}`
   const cached = getCached<Entry>(cacheKey)
   if (cached) return cached
 
@@ -242,6 +242,21 @@ export async function getCategoryEntries(category: string): Promise<Entry[]> {
       : [] // Fallback to empty if no entries found
   } catch (error) {
     console.error(`Error getting entries for category ${category}:`, error)
+    return []
+  }
+}
+
+/**
+ * Get assets for an entry by entry ID
+ */
+export async function getAssetsByEntryId(entryId: string): Promise<any[]> {
+  try {
+    const response = await apiFetch(`/api/entries/${entryId}/assets`)
+    if (!response.ok) return []
+    const { data } = await response.json()
+    return data || []
+  } catch (error) {
+    console.error(`Error fetching assets for entry ${entryId}:`, error)
     return []
   }
 }

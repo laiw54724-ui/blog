@@ -3,37 +3,32 @@ import BaseLayout from '../../layouts/BaseLayout.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
 import { formatDate } from '@personal-blog/shared'
 import { renderMarkdownToHtml } from '../../lib/markdown'
-import { getPosts, getEntryBySlug } from '../../lib/data'
+import { getEntryBySlug, getAssetsByEntryId } from '../../lib/data'
 import { applyPageCacheHeaders } from '../../lib/response'
 
-interface Props {
-  slug: string
-}
-
-export async function getStaticPaths() {
-  const posts = await getPosts()
-  return posts.map((post) => ({
-    params: { slug: post.slug },
-    props: { slug: post.slug },
-  }))
-}
-
-const { slug } = Astro.props
+const slug = Astro.params.slug
 
 // SSR: 每次請求時取最新資料
-const entry = slug ? await getEntryBySlug(slug) : null
+const entry = slug ? await getEntryBySlug(decodeURIComponent(slug)) : null
 
 if (!entry) {
   return Astro.redirect('/stream')
 }
 
 const renderedContent = await renderMarkdownToHtml(entry.content_markdown)
+const displayTitle = entry.title?.trim() || formatDate(entry.created_at)
+
+// Fetch assets (cover image, etc.)
+const assets = await getAssetsByEntryId(entry.id)
+const coverAsset = assets.find((a: any) => a.kind === 'cover')
+const imageAssets = assets.filter((a: any) => a.kind === 'image')
+const API_BASE = (import.meta as any).env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
 
 // 應用快取策略：10分鐘 CDN 快取 + 1小時過期後仍可用
 applyPageCacheHeaders(Astro.response, 'detail')
 ---
 
-<BaseLayout title={`${entry.title} | Double River`}>
+<BaseLayout title={`${displayTitle} | Double River`}>
   <ReaderControls client:load />
   <article class="post">
     <header class="post-header">
@@ -43,12 +38,34 @@ applyPageCacheHeaders(Astro.response, 'detail')
           <span class="category">{entry.category}</span>
         )}
       </div>
-      <h1>{entry.title}</h1>
+      <h1>{displayTitle}</h1>
       {entry.excerpt && <p class="excerpt">{entry.excerpt}</p>}
+      {coverAsset && (
+        <img
+          class="cover-image"
+          src={`${API_BASE}/api/assets/${coverAsset.storage_key}`}
+          alt={coverAsset.alt_text || displayTitle}
+          width={coverAsset.width}
+          height={coverAsset.height}
+        />
+      )}
     </header>
 
     <div class="post-content">
       <div class="markdown-content" set:html={renderedContent} />
+      {imageAssets.length > 0 && (
+        <div class="post-images">
+          {imageAssets.map((asset: any) => (
+            <img
+              src={`${API_BASE}/api/assets/${asset.storage_key}`}
+              alt={asset.alt_text || ''}
+              width={asset.width}
+              height={asset.height}
+              loading="lazy"
+            />
+          ))}
+        </div>
+      )}
     </div>
 
     <footer class="post-footer">
@@ -100,6 +117,26 @@ applyPageCacheHeaders(Astro.response, 'detail')
     font-size: 1rem;
     color: #666;
     line-height: 1.7;
+  }
+
+  .cover-image {
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin-top: 1.5rem;
+  }
+
+  .post-images {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin: 2rem 0;
+  }
+
+  .post-images img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
   }
 
   .post-content {

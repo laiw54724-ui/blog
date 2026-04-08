@@ -148,6 +148,10 @@ export async function createEntry(
 /**
  * Update an existing entry
  */
+const UPDATABLE_COLUMNS = new Set([
+  'title', 'content_markdown', 'excerpt', 'category', 'status', 'visibility',
+])
+
 export async function updateEntry(
   db: D1Database,
   id: string,
@@ -164,7 +168,7 @@ export async function updateEntry(
   const params: unknown[] = []
 
   for (const [key, value] of Object.entries(fields)) {
-    if (value !== undefined) {
+    if (value !== undefined && UPDATABLE_COLUMNS.has(key)) {
       setClauses.push(`${key} = ?`)
       params.push(value)
     }
@@ -213,4 +217,51 @@ export async function addTagsToEntry(
       .bind(entryId, tagId)
       .run()
   }
+}
+
+/**
+ * Create an asset record linked to an entry
+ */
+export async function createAsset(
+  db: D1Database,
+  asset: {
+    id: string
+    entry_id: string
+    kind: 'image' | 'cover' | 'attachment'
+    storage_key: string
+    mime_type: string
+    width?: number
+    height?: number
+    alt_text?: string
+    sort_order?: number
+  }
+) {
+  return await db
+    .prepare(
+      `INSERT INTO assets (id, entry_id, kind, storage_key, mime_type, width, height, alt_text, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(
+      asset.id,
+      asset.entry_id,
+      asset.kind,
+      asset.storage_key,
+      asset.mime_type,
+      asset.width || null,
+      asset.height || null,
+      asset.alt_text || null,
+      asset.sort_order || 0
+    )
+    .run()
+}
+
+/**
+ * Get assets for an entry
+ */
+export async function getAssetsByEntryId(db: D1Database, entryId: string) {
+  const result = await db
+    .prepare('SELECT * FROM assets WHERE entry_id = ? ORDER BY sort_order ASC')
+    .bind(entryId)
+    .all()
+  return result.results || []
 }

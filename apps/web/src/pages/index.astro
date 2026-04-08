@@ -34,8 +34,8 @@ applyPageCacheHeaders(Astro.response, 'stream')
         {
           latestPosts.length > 0 ? (
             latestPosts.map((post) => (
-              <a href={`/post/${post.slug}`} class="feed-item">
-                <h3>{post.title}</h3>
+              <a href={`/post/${encodeURIComponent(post.slug || '')}`} class="feed-item">
+                <h3>{post.title?.trim() || formatDate(post.created_at)}</h3>
                 <time>{formatDate(post.created_at)}</time>
               </a>
             ))
@@ -53,8 +53,8 @@ applyPageCacheHeaders(Astro.response, 'stream')
         {
           latestArticles.length > 0 ? (
             latestArticles.map((article) => (
-              <a href={`/article/${article.slug}`} class="feed-item">
-                <h3>{article.title}</h3>
+              <a href={`/article/${encodeURIComponent(article.slug || '')}`} class="feed-item">
+                <h3>{article.title?.trim() || formatDate(article.created_at)}</h3>
                 <time>{formatDate(article.created_at)}</time>
               </a>
             ))

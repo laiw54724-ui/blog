@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { D1Database } from '@cloudflare/workers-types'
-import { getEntries, getEntryById, getEntryBySlug, updateEntry, archiveEntry, UpdateEntrySchema } from '@personal-blog/shared'
+import { getEntries, getEntryById, getEntryBySlug, updateEntry, archiveEntry, UpdateEntrySchema, getAssetsByEntryId } from '@personal-blog/shared'
 
 interface Env {
   DB: D1Database
@@ -42,7 +42,7 @@ router.get('/', async (c) => {
     const entries = await getEntries(db, {
       entryType: entryType || undefined,
       category: category || undefined,
-      status: status || undefined,
+      status: status || 'published',
       visibility,
       limit,
       offset,
@@ -95,6 +95,24 @@ router.get('/:id', async (c) => {
   } catch (error) {
     console.error('Error fetching entry:', error)
     return c.json({ error: 'Failed to fetch entry' }, 500)
+  }
+})
+
+// GET /api/entries/:id/assets - Get assets for an entry
+router.get('/:id/assets', async (c) => {
+  const db = c.env?.DB
+  if (!db) {
+    return c.json({ error: 'Database not configured' }, 500)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    const assets = await getAssetsByEntryId(db, id)
+    return c.json({ data: assets })
+  } catch (error) {
+    console.error('Error fetching assets:', error)
+    return c.json({ error: 'Failed to fetch assets' }, 500)
   }
 })
 

@@ -17,9 +17,9 @@ const commands = [
     options: [
       {
         name: 'content',
-        description: '貼文內容',
+        description: '貼文內容（若上傳 .md/.txt 檔案，此欄位可省略）',
         type: 3, // STRING
-        required: true,
+        required: false,
       },
       {
         name: 'category',
@@ -32,18 +32,24 @@ const commands = [
           { name: '旅行', value: 'travel' },
           { name: '地點', value: 'place' },
         ],
+      },
+      {
+        name: 'file',
+        description: '上傳圖片或 .md/.txt 檔案',
+        type: 11, // ATTACHMENT
+        required: false,
       },
     ],
   },
   {
     name: '文章',
-    description: '創建一篇文章草稿',
+    description: '發佈一篇文章',
     options: [
       {
         name: 'content',
-        description: '文章內容',
+        description: '文章內容（若上傳 .md/.txt 檔案，此欄位可省略）',
         type: 3,
-        required: true,
+        required: false,
       },
       {
         name: 'category',
@@ -56,6 +62,12 @@ const commands = [
           { name: '旅行', value: 'travel' },
           { name: '地點', value: 'place' },
         ],
+      },
+      {
+        name: 'file',
+        description: '上傳圖片或 .md/.txt 檔案',
+        type: 11, // ATTACHMENT
+        required: false,
       },
     ],
   },
@@ -65,9 +77,15 @@ const commands = [
     options: [
       {
         name: 'content',
-        description: '旅行內容',
+        description: '旅行內容（若上傳 .md/.txt 檔案，此欄位可省略）',
         type: 3,
-        required: true,
+        required: false,
+      },
+      {
+        name: 'file',
+        description: '上傳圖片或 .md/.txt 檔案',
+        type: 11, // ATTACHMENT
+        required: false,
       },
     ],
   },
@@ -77,9 +95,15 @@ const commands = [
     options: [
       {
         name: 'content',
-        description: '書摘內容',
+        description: '書摘內容（若上傳 .md/.txt 檔案，此欄位可省略）',
         type: 3,
-        required: true,
+        required: false,
+      },
+      {
+        name: 'file',
+        description: '上傳圖片或 .md/.txt 檔案',
+        type: 11, // ATTACHMENT
+        required: false,
       },
     ],
   },

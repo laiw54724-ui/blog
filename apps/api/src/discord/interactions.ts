@@ -1,8 +1,31 @@
 import type { Context } from 'hono'
 import { verifyDiscordSignature } from './verify'
-import { COMMAND_PRESETS, getCommandPreset, CHINESE_TO_ENGLISH_COMMAND_MAP } from './presets'
+import { getCommandPreset, CHINESE_TO_ENGLISH_COMMAND_MAP } from './presets'
 import { createEntryFromCommand } from './createEntry'
 import { getEntryBySlug, updateEntry, archiveEntry } from '@personal-blog/shared'
+import { processAttachments } from './attachments'
+
+function normalizeSlug(input: string): string {
+  const raw = input.trim()
+  try {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      const url = new URL(raw)
+      const parts = url.pathname.split('/').filter(Boolean)
+      return decodeURIComponent(parts[parts.length - 1] || '').trim()
+    }
+  } catch {}
+  return decodeURIComponent(raw).trim()
+}
+
+interface DiscordAttachmentResolved {
+  id: string
+  filename: string
+  size: number
+  url: string
+  content_type?: string
+  width?: number
+  height?: number
+}
 
 interface DiscordInteractionData {
   name: string
@@ -11,6 +34,9 @@ interface DiscordInteractionData {
     value: string
     type: number
   }>
+  resolved?: {
+    attachments?: Record<string, DiscordAttachmentResolved>
+  }
 }
 
 interface DiscordUser {
@@ -76,8 +102,9 @@ export async function handleDiscordInteraction(c: Context) {
 
     // --- Handle edit command ---
     if (commandKey === 'edit') {
+
       const slugOption = data.options?.find((opt: any) => opt.name === 'slug')
-      const slug = slugOption?.value?.trim()
+      const slug = slugOption?.value ? normalizeSlug(slugOption.value) : ''
       if (!slug) {
         return c.json({ type: 4, data: { content: '❌ 請提供文章的 slug' } })
       }
@@ -118,8 +145,9 @@ export async function handleDiscordInteraction(c: Context) {
 
     // --- Handle delete command ---
     if (commandKey === 'delete') {
+
       const slugOption = data.options?.find((opt: any) => opt.name === 'slug')
-      const slug = slugOption?.value?.trim()
+      const slug = slugOption?.value ? normalizeSlug(slugOption.value) : ''
       if (!slug) {
         return c.json({ type: 4, data: { content: '❌ 請提供文章的 slug' } })
       }
@@ -157,13 +185,56 @@ export async function handleDiscordInteraction(c: Context) {
     // Extract content from command options
     const contentOption = data.options?.find((opt: any) => opt.name === 'content')
     const categoryOption = data.options?.find((opt: any) => opt.name === 'category')
-    const content = contentOption?.value || ''
+    let content = contentOption?.value || ''
     const selectedCategory = categoryOption?.value
+
+    // Collect resolved attachments from Discord
+    const resolvedAttachments = data.resolved?.attachments
+      ? Object.values(data.resolved.attachments)
+      : []
+
+    // If there's a file attachment, process it
+    let attachmentResult = null
+    if (resolvedAttachments.length > 0) {
+      try {
+        const bucket = (c.env as any)?.ASSETS_BUCKET
+        if (!bucket) {
+          return c.json({
+            type: 4,
+            data: { content: '❌ 檔案儲存未設定（R2 bucket 未綁定）' },
+          })
+        }
+
+        // Generate entry ID early so attachments link to the correct entry
+        const { generateId } = await import('@personal-blog/shared')
+        const preEntryId = generateId('entry')
+
+        attachmentResult = await processAttachments(
+          resolvedAttachments,
+          preEntryId,
+          bucket,
+          db
+        )
+        // Store the pre-generated ID so createEntryFromCommand reuses it
+        ;(attachmentResult as any)._entryId = preEntryId
+
+        // If a .md/.txt file was uploaded, use its content
+        if (attachmentResult.textContent) {
+          content = attachmentResult.textContent
+        }
+      } catch (error) {
+        console.error('Error processing attachments:', error)
+        return c.json({
+          type: 4,
+          data: { content: '❌ 檔案處理失敗，請稍後重試' },
+        })
+      }
+    }
 
     if (!content || content.trim().length === 0) {
       return c.json({
         type: 4,
-        data: { content: '❌ 請提供內容' },
+        data: { content: '❌ 請提供內容（輸入文字或上傳 .md/.txt 檔案）' },
       })
     }
 
@@ -172,11 +243,21 @@ export async function handleDiscordInteraction(c: Context) {
         preset,
         content: content.trim(),
         selectedCategory,
+        entryId: (attachmentResult as any)?._entryId,
       })
+
+      // Build response message
+      let message = result.message
+      if (attachmentResult?.assets.length) {
+        message += `\n📎 已上傳 ${attachmentResult.assets.length} 個檔案`
+      }
+      if (attachmentResult?.textContent) {
+        message += `\n📄 內容已從上傳的檔案匯入`
+      }
 
       return c.json({
         type: 4,
-        data: { content: result.message },
+        data: { content: message },
       })
     } catch (error) {
       console.error('Error handling command:', error)

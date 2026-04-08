@@ -48,9 +48,9 @@ applyPageCacheHeaders(Astro.response, 'articles')
                 <a
                   href={`/${
                     entry.entry_type === 'article' ? 'article' : 'post'
-                  }/${entry.slug}`}
+                  }/${encodeURIComponent(entry.slug || '')}`}
                 >
-                  {entry.title}
+                  {entry.title?.trim() || formatDate(entry.created_at)}
                 </a>
               </h2>
               <time datetime={entry.created_at}>

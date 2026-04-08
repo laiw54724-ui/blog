@@ -18,6 +18,7 @@ export interface CreateEntryInput {
   content: string
   title?: string
   selectedCategory?: string // User-selected category from Discord command option
+  entryId?: string // Pre-generated entry ID (for linking attachments)
 }
 
 export interface CreateEntryOutput {
@@ -30,10 +31,43 @@ export interface CreateEntryOutput {
 /**
  * Extract title from content (first line or auto-generate)
  */
-function extractTitle(content: string, fallback: string = 'Untitled'): string {
-  const lines = content.split('\n').filter((l) => l.trim())
-  const firstLine = lines[0]?.trim()
-  return firstLine && firstLine.length > 3 ? firstLine : fallback
+function extractTitle(content: string, fallback?: string): string {
+  const lines = content
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    // Strip markdown heading markers from each line for title consideration
+    .map((l) => l.replace(/^#{1,6}\s+/, ''))
+
+  const candidate =
+    lines.find((line) => line.replace(/[^\p{L}\p{N}\u4e00-\u9fff]/gu, '').length >= 4) ||
+    lines[0]
+
+  if (candidate) return candidate
+
+  if (fallback) return fallback
+
+  return new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date())
+}
+
+async function ensureUniqueSlug(db: any, baseSlug: string): Promise<string> {
+  let slug = baseSlug
+  let i = 2
+  while (true) {
+    const existing = await db
+      .prepare('SELECT id FROM entries WHERE slug = ? LIMIT 1')
+      .bind(slug)
+      .first()
+    if (!existing) return slug
+    slug = `${baseSlug}-${i}`
+    i++
+  }
 }
 
 /**
@@ -70,11 +104,23 @@ export async function createEntryFromCommand(
   try {
     const { preset, content, title: customTitle, selectedCategory } = input
 
-    const title = customTitle || extractTitle(content)
-    const entryId = generateId('entry')
-    const slug = slugify(title)
-    const tags = extractHashtags(content)
-    const excerpt = generateExcerpt(content)
+    const normalizedContent = content
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trim()
+
+    const fallbackTitle = new Intl.DateTimeFormat('zh-TW', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date())
+
+    const title = customTitle?.trim() || extractTitle(normalizedContent, fallbackTitle)
+    const entryId = input.entryId || generateId('entry')
+    const baseSlug = slugify(title)
+    const slug = await ensureUniqueSlug(db, baseSlug)
+    const tags = extractHashtags(normalizedContent)
+    const excerpt = generateExcerpt(normalizedContent)
 
     // Use selectedCategory if provided, otherwise use preset category
     const finalCategory = selectedCategory || preset.category
@@ -86,7 +132,7 @@ export async function createEntryFromCommand(
       entry_type: preset.entry_type,
       category: finalCategory,
       title,
-      content_markdown: content,
+      content_markdown: normalizedContent,
       excerpt,
       status: preset.status,
       visibility: preset.visibility,

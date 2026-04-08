@@ -43,9 +43,12 @@ export async function renderMarkdownToHtml(markdown: string): Promise<string> {
  * Fallback when markdown rendering fails
  */
 function escapeHtml(text: string): string {
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 /**
@@ -59,11 +62,20 @@ export function extractPlainText(markdown: string, maxLength?: number): string {
 
   // Remove markdown syntax and get plain text
   let text = markdown
-    .replace(/^#+\s+/gm, '') // Remove headers
-    .replace(/\*\*?(.+?)\*\*?/g, '$1') // Remove bold/italic
-    .replace(/\[(.+?)\]\(.+?\)/g, '$1') // Remove links
-    .replace(/`+(.+?)`+/g, '$1') // Remove code blocks
-    .replace(/[-*_~]/g, '') // Remove other markdown chars
+  .replace(/\r\n/g, '\n')
+  .replace(/\r/g, '\n')
+  .replace(/^#{1,6}\s+/gm, '')
+  .replace(/\*\*?(.+?)\*\*?/g, '$1')
+  .replace(/_(.+?)_/g, '$1')
+  .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+  .replace(/`{1,3}(.+?)`{1,3}/g, '$1')
+  .replace(/^\s*[-*+]\s+/gm, '')
+  .replace(/^\s*\d+\.\s+/gm, '')
+  .replace(/^\s*>\s?/gm, '')
+  .replace(/[-*_~]/g, '')
+  .replace(/\n{2,}/g, '\n')
+  .replace(/\s+/g, ' ')
+  .trim()
 
   // Limit length if specified
   if (maxLength && text.length > maxLength) {

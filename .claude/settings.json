@@ -19,7 +19,22 @@
       "Bash(rm esbuild-win32-x64-0.27.3.tgz)",
       "Bash(apps/web/node_modules/@esbuild/win32-x64/esbuild.exe --version)",
       "Bash(grep -l \"bottom-nav\" apps/web/dist/server/chunks/*.mjs)",
-      "Bash(apps/web/node_modules/.bin/wrangler versions:*)"
+      "Bash(apps/web/node_modules/.bin/wrangler versions:*)",
+      "Bash(node -e \"console.log\\(require\\(''./apps/web/node_modules/marked/package.json''\\).version\\)\")",
+      "Bash(node -e \"console.log\\(require\\(''./node_modules/marked/package.json''\\).version\\)\")",
+      "Bash(node apps/web/node_modules/.bin/wrangler deploy --config apps/web/dist/server/wrangler.json)",
+      "Bash(npx --prefix apps/web wrangler deploy --config apps/web/dist/server/wrangler.json)",
+      "Bash(curl -s \"https://personal-blog-api.personal-blog.workers.dev/api/entries?type=article&visibility=public\")",
+      "Bash(node -e \"const d=require\\(''''fs''''\\).readFileSync\\(''''/dev/stdin'''',''''utf8''''\\); const j=JSON.parse\\(d\\); console.log\\(''''articles count:'''', j.count\\); j.data.forEach\\(e => console.log\\(e.slug, e.status, e.visibility\\)\\)\")",
+      "Bash(curl -s \"https://personal-blog-web.personal-blog.workers.dev/\")",
+      "Bash(curl -s \"https://personal-blog-web.personal-blog.workers.dev/stream\")",
+      "Bash(curl -s \"https://personal-blog-web.personal-blog.workers.dev/articles\")",
+      "Read(//c/Users/User/Downloads/**)",
+      "Bash(curl -s \"https://personal-blog-web.personal-blog.workers.dev/article/%E6%B8%AC%E8%A9%A6%E6%96%87%E7%AB%A0\")",
+      "Bash(npx tsx:*)",
+      "Bash(source .env.local)",
+      "Bash(export DISCORD_TOKEN DISCORD_CLIENT_ID DISCORD_GUILD_ID)",
+      "Bash(npx --prefix apps/api wrangler deploy --config apps/api/wrangler.toml)"
     ]
   }
 }

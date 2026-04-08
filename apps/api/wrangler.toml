@@ -18,3 +18,11 @@ database_id = "0f871179-2302-42be-a614-8f96e1692766"
 binding = "DB"
 database_name = "personal-blog"
 database_id = "0f871179-2302-42be-a614-8f96e1692766"
+
+[[r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "personal-blog-assets"
+
+[[env.production.r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "personal-blog-assets"
