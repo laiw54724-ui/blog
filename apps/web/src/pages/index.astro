@@ -1,19 +1,20 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
+import EntryCard from '../components/EntryCard.astro'
 import { getPosts, getArticles } from '../lib/data'
-import { formatDate } from '@personal-blog/shared'
+import { buildEntryCardModels, CATEGORY_LABELS } from '../lib/presenters'
 import { applyPageCacheHeaders } from '../lib/response'
 
-// SSR: 每次請求時取最新資料
 const [allPosts, allArticles] = await Promise.all([
   getPosts(),
   getArticles(),
 ])
 
-const latestPosts = allPosts.slice(0, 5)
-const latestArticles = allArticles.slice(0, 5)
+const [postModels, articleModels] = await Promise.all([
+  buildEntryCardModels(allPosts.slice(0, 5), { excerptLength: 100 }),
+  buildEntryCardModels(allArticles.slice(0, 5), { excerptLength: 150 }),
+])
 
-// 首頁應用 stream 級別的快取（短快取）
 applyPageCacheHeaders(Astro.response, 'stream')
 ---
 
@@ -32,12 +33,19 @@ applyPageCacheHeaders(Astro.response, 'stream')
       <h2>最新動態</h2>
       <div class="feed-list">
         {
-          latestPosts.length > 0 ? (
-            latestPosts.map((post) => (
-              <a href={`/post/${encodeURIComponent(post.slug || '')}`} class="feed-item">
-                <h3>{post.title?.trim() || formatDate(post.created_at)}</h3>
-                <time>{formatDate(post.created_at)}</time>
-              </a>
+          postModels.length > 0 ? (
+            postModels.map((vm) => (
+              <EntryCard
+                href={vm.href}
+                title={vm.displayTitle}
+                excerpt={vm.displayExcerpt}
+                date={vm.displayDate}
+                categoryLabel={vm.categoryLabel}
+                coverUrl={vm.coverUrl}
+                coverAlt={vm.coverAlt}
+                stats={vm.metrics}
+                variant="compact"
+              />
             ))
           ) : (
             <p>還沒有動態</p>
@@ -51,12 +59,19 @@ applyPageCacheHeaders(Astro.response, 'stream')
       <h2>最新文章</h2>
       <div class="feed-list">
         {
-          latestArticles.length > 0 ? (
-            latestArticles.map((article) => (
-              <a href={`/article/${encodeURIComponent(article.slug || '')}`} class="feed-item">
-                <h3>{article.title?.trim() || formatDate(article.created_at)}</h3>
-                <time>{formatDate(article.created_at)}</time>
-              </a>
+          articleModels.length > 0 ? (
+            articleModels.map((vm) => (
+              <EntryCard
+                href={vm.href}
+                title={vm.displayTitle}
+                excerpt={vm.displayExcerpt}
+                date={vm.displayDate}
+                categoryLabel={vm.categoryLabel}
+                coverUrl={vm.coverUrl}
+                coverAlt={vm.coverAlt}
+                stats={vm.metrics}
+                variant="list"
+              />
             ))
           ) : (
             <p>還沒有文章</p>
@@ -134,30 +149,6 @@ applyPageCacheHeaders(Astro.response, 'stream')
     margin-bottom: 1.5rem;
   }
 
-  .feed-item {
-    padding: 1rem;
-    border: 1px solid #eee;
-    border-radius: 6px;
-    text-decoration: none;
-    color: #000;
-    transition: all 0.2s;
-  }
-
-  .feed-item:hover {
-    border-color: #ddd;
-    background: #fafafa;
-  }
-
-  .feed-item h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
-  }
-
-  .feed-item time {
-    font-size: 0.85rem;
-    color: #999;
-  }
-
   .view-all {
     color: #0066cc;
     text-decoration: none;
@@ -210,15 +201,6 @@ applyPageCacheHeaders(Astro.response, 'stream')
     margin: 0;
     color: #666;
     font-size: 0.9rem;
-  }
-
-  .error-message {
-    background: #fee;
-    color: #c00;
-    padding: 1rem;
-    margin: 2rem;
-    border-radius: 4px;
-    max-width: 1000px;
   }
 
   @media (max-width: 768px) {

@@ -58,12 +58,12 @@ const {
       initialComments.map((comment) => (
         <article class="comment-item" data-comment-id={comment.id}>
           <header class="comment-meta">
-            <strong>{comment.author || '匿名'}</strong>
+            <strong>{comment.author_name || '匿名'}</strong>
             <time datetime={comment.created_at}>
               {new Date(comment.created_at).toLocaleString('zh-TW')}
             </time>
           </header>
-          <div class="comment-body" set:html={renderCommentMarkdownSafe(comment.content)} />
+          <div class="comment-body" set:html={renderCommentMarkdownSafe(comment.body_markdown)} />
         </article>
       ))
     ) : (
@@ -187,7 +187,12 @@ const {
   }
 </style>
 <script>
-  function renderCommentMarkdownSafe(input) {
+// @ts-nocheck
+        /**
+    * @param {string} input
+    * @returns {string}
+    */
+    function renderCommentMarkdownSafe(input) {
     const source = (input || '').replace(/\r\n?/g, '\n')
     if (!source) return ''
 
@@ -199,70 +204,114 @@ const {
     html = html.replace(/\n/g, '<br>')
 
     return html
-  }
-
-  function escapeHtml(text) {
-    const map = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;'
     }
-    return text.replace(/[&<>"']/g, function(m) { return map[m] })
-  }
 
-  document.querySelectorAll('.comment-board').forEach((root) => {
+  /**
+    * @param {string} text
+    * @returns {string}
+    */
+    function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (match) => {
+        switch (match) {
+        case '&':
+            return '&amp;'
+        case '<':
+            return '&lt;'
+        case '>':
+            return '&gt;'
+        case '"':
+            return '&quot;'
+        case "'":
+            return '&#039;'
+        default:
+            return match
+        }
+    })
+    }
+
+  document.querySelectorAll('.comment-board').forEach((rootEl) => {
+    if (!(rootEl instanceof HTMLElement)) return
+
+    const root = rootEl
+
     if (root.dataset.bound === '1') return
     root.dataset.bound = '1'
 
     const entryId = root.dataset.entryId
     const apiBase = root.dataset.apiBase
 
-    const form = root.querySelector('.comment-form')
-    const list = root.querySelector('.comment-list')
+    const formEl = root.querySelector('.comment-form')
+    const listEl = root.querySelector('.comment-list')
     const statusEl = root.querySelector('.comment-status')
     const countEl = root.querySelector('.comment-count')
-    const textarea = root.querySelector('textarea[name="body_markdown"]')
-    const authorInput = root.querySelector('input[name="author_name"]')
-    const websiteInput = root.querySelector('input[name="website"]')
-    const startedAtInput = root.querySelector('input[name="form_started_at"]')
+    const textareaEl = root.querySelector('textarea[name="body_markdown"]')
+    const authorInputEl = root.querySelector('input[name="author_name"]')
+    const websiteInputEl = root.querySelector('input[name="website"]')
+    const startedAtInputEl = root.querySelector('input[name="form_started_at"]')
+
+    if (!(formEl instanceof HTMLFormElement)) return
+    if (!(listEl instanceof HTMLElement)) return
+    if (!(statusEl instanceof HTMLElement)) return
+    if (!(textareaEl instanceof HTMLTextAreaElement)) return
+    if (!(startedAtInputEl instanceof HTMLInputElement)) return
+
+    const form = formEl
+    const list = listEl
+    const textarea = textareaEl
+    const startedAtInput = startedAtInputEl
+    const count = countEl instanceof HTMLElement ? countEl : null
+    const authorInput = authorInputEl instanceof HTMLInputElement ? authorInputEl : null
+    const websiteInput = websiteInputEl instanceof HTMLInputElement ? websiteInputEl : null
 
     const updateCount = () => {
-      const count = list.querySelectorAll('.comment-item').length
-      if (countEl) countEl.textContent = String(count)
+      const nextCount = list.querySelectorAll('.comment-item').length
+      if (count) count.textContent = String(nextCount)
+
       const metric = document.querySelector('[data-metric="comments"]')
-      if (metric) metric.textContent = String(count)
+      if (metric instanceof HTMLElement) {
+        metric.textContent = String(nextCount)
+      }
     }
 
     const removeEmptyState = () => {
       const empty = list.querySelector('.empty-comments')
-      if (empty) empty.remove()
+      if (empty instanceof HTMLElement) {
+        empty.remove()
+      }
     }
 
-    const prependComment = (comment) => {
-      removeEmptyState()
+    /**
+    * @param {{ id: string, author_name: string, body_markdown: string, created_at: string }} comment
+    * @returns {void}
+    */
+    function prependComment(comment) {
+    removeEmptyState()
 
-      const article = document.createElement('article')
-      article.className = 'comment-item'
-      article.dataset.commentId = comment.id
-      article.innerHTML = `
+    const article = document.createElement('article')
+    article.className = 'comment-item'
+    article.dataset.commentId = comment.id
+    article.innerHTML = `
         <header class="comment-meta">
-          <strong>${comment.author || '匿名'}</strong>
-          <time datetime="${comment.created_at}">${new Date(comment.created_at).toLocaleString('zh-TW')}</time>
+        <strong>${escapeHtml(comment.author_name || '匿名')}</strong>
+        <time datetime="${comment.created_at}">${new Date(comment.created_at).toLocaleString('zh-TW')}</time>
         </header>
         <p></p>
-      `
-      article.querySelector('p').innerHTML = renderCommentMarkdownSafe(comment.content)
-      list.prepend(article)
-      updateCount()
+    `
+
+    const bodyEl = article.querySelector('p')
+    if (bodyEl instanceof HTMLParagraphElement) {
+        bodyEl.innerHTML = renderCommentMarkdownSafe(comment.body_markdown)
     }
 
-    form?.addEventListener('submit', async (event) => {
+    list.prepend(article)
+    updateCount()
+    }
+
+    form.addEventListener('submit', async (event) => {
       event.preventDefault()
       statusEl.textContent = '送出中…'
 
-      const bodyMarkdown = textarea?.value?.trim() || ''
+      const bodyMarkdown = textarea.value.trim()
       const lower = bodyMarkdown.toLowerCase()
 
       const suspiciousWords = [
@@ -275,16 +324,17 @@ const {
         '加賴',
         '加line',
       ]
+
       if (suspiciousWords.some((word) => lower.includes(word))) {
         statusEl.textContent = '內容看起來像廣告，請修改後再送出'
         return
       }
 
       const payload = {
-        author: authorInput?.value?.trim() || '匿名',
-        content: bodyMarkdown,
-        website: websiteInput?.value?.trim() || '',
-        form_started_at: Number(startedAtInput?.value || Date.now()),
+        author_name: authorInput ? authorInput.value.trim() || '匿名' : '匿名',
+        body_markdown: bodyMarkdown,
+        website: websiteInput ? websiteInput.value.trim() || '' : '',
+        form_started_at: Number(startedAtInput.value || Date.now()),
       }
 
       if (!payload.body_markdown) {
@@ -299,24 +349,20 @@ const {
           body: JSON.stringify(payload),
         })
 
-        const json = await res.json()
+        const json = /** @type {{ data?: { id: string, author_name: string, body_markdown: string, created_at: string }, error?: string }} */ (await res.json())
 
         if (!res.ok) {
-          statusEl.textContent = json?.error || '留言失敗'
+          statusEl.textContent = json.error || '留言失敗'
           return
         }
 
-        if (json?.data) {
+        if (json.data) {
           prependComment(json.data)
           form.reset()
-
-          const newStartedAt = root.querySelector('input[name="form_started_at"]')
-          if (newStartedAt) {
-            newStartedAt.value = String(Date.now())
-          }
+          startedAtInput.value = String(Date.now())
 
           statusEl.textContent = '留言已送出'
-          setTimeout(() => {
+          window.setTimeout(() => {
             statusEl.textContent = ''
           }, 1800)
         }

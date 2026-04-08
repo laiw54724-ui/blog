@@ -1,16 +1,20 @@
-import { defineMiddleware } from 'astro:middleware'
+import type { MiddlewareHandler } from 'astro'
 import { setApiService } from './lib/data'
 
-export const onRequest = defineMiddleware(async (_context, next) => {
-  try {
-    // Dynamic import to avoid build-time errors
-    const { env } = await import('cloudflare:workers')
-    const cfEnv = env as any
-    if (cfEnv?.API_SERVICE) {
-      setApiService(cfEnv.API_SERVICE)
+type ApiService = {
+  fetch: typeof fetch
+}
+
+type RuntimeLocals = {
+  runtime?: {
+    env?: {
+      API?: ApiService
     }
-  } catch {
-    // Not running on Cloudflare (local dev) — use public DNS fallback
   }
+}
+
+export const onRequest: MiddlewareHandler = async (context, next) => {
+  const locals = context.locals as RuntimeLocals
+  setApiService(locals.runtime?.env?.API ?? null)
   return next()
-})
+}

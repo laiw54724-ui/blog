@@ -1,7 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
+import EntryCard from '../components/EntryCard.astro'
 import { getEntriesByCategory } from '../lib/data'
-import { formatDate } from '@personal-blog/shared'
+import { buildEntryCardModels, CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from '../lib/presenters'
 import { applyPageCacheHeaders } from '../lib/response'
 
 export async function getStaticPaths() {
@@ -12,18 +13,18 @@ export async function getStaticPaths() {
 }
 
 const { category } = Astro.params
-const categoryLabels: Record<string, string> = {
-  journal: '日記',
-  reading: '讀書',
-  travel: '旅行',
-  place: '地點',
-}
+const label = CATEGORY_LABELS[category || ''] || category || ''
+const description = CATEGORY_DESCRIPTIONS[category || ''] || ''
 
-let entries: any[] = []
-let error = null
+let cardModels: Awaited<ReturnType<typeof buildEntryCardModels>> = []
+let error: string | null = null
 
 try {
-  entries = await getEntriesByCategory(category || '')
+  const entries = await getEntriesByCategory(category || '')
+  cardModels = await buildEntryCardModels(entries, {
+    categoryLabelOverride: label,
+    excerptLength: 120,
+  })
 } catch (e) {
   error = '無法載入內容，請稍後重試'
 }
@@ -31,33 +32,32 @@ try {
 applyPageCacheHeaders(Astro.response, 'articles')
 ---
 
-<BaseLayout title={categoryLabels[category || '']}>
+<BaseLayout title={`${label} | Double River`} description={description}>
   <div class="category-container">
     <header class="category-header">
-      <h1>{categoryLabels[category || '']}</h1>
+      <h1>{label}</h1>
+      {description && <p class="category-desc">{description}</p>}
     </header>
 
     {error && <div class="error-message">{error}</div>}
 
     <div class="entries-list">
       {
-        entries.length > 0 ? (
-          entries.map((entry) => (
-            <div class="entry-item">
-              <h2>
-                <a
-                  href={`/${
-                    entry.entry_type === 'article' ? 'article' : 'post'
-                  }/${encodeURIComponent(entry.slug || '')}`}
-                >
-                  {entry.title?.trim() || formatDate(entry.created_at)}
-                </a>
-              </h2>
-              <time datetime={entry.created_at}>
-                {formatDate(entry.created_at)}
-              </time>
-              {entry.excerpt && <p class="excerpt">{entry.excerpt}</p>}
-            </div>
+        cardModels.length > 0 ? (
+          cardModels.map((vm) => (
+            <EntryCard
+              href={vm.href}
+              title={vm.displayTitle}
+              excerpt={vm.displayExcerpt}
+              date={vm.displayDate}
+              categoryLabel={vm.categoryLabel}
+              typeLabel={vm.typeLabel}
+              coverUrl={vm.coverUrl}
+              coverAlt={vm.coverAlt}
+              stats={vm.metrics}
+              variant="list"
+              showTypeBadge={true}
+            />
           ))
         ) : (
           <p class="empty-state">這個分類還沒有內容</p>
@@ -69,57 +69,30 @@ applyPageCacheHeaders(Astro.response, 'articles')
 
 <style>
   .category-container {
-    max-width: 700px;
+    max-width: 720px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 2rem 1.5rem;
   }
 
   .category-header {
-    margin-bottom: 3rem;
+    margin-bottom: 2.5rem;
   }
 
   .category-header h1 {
-    font-size: 2rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .category-desc {
+    color: #888;
+    font-size: 0.95rem;
   }
 
   .entries-list {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
-  }
-
-  .entry-item {
-    padding-bottom: 2rem;
-    border-bottom: 1px solid #eee;
-  }
-
-  .entry-item:last-child {
-    border-bottom: none;
-  }
-
-  .entry-item h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1.3rem;
-  }
-
-  .entry-item a {
-    color: #000;
-    text-decoration: none;
-  }
-
-  .entry-item a:hover {
-    text-decoration: underline;
-  }
-
-  .entry-item time {
-    color: #999;
-    font-size: 0.9rem;
-  }
-
-  .excerpt {
-    margin: 0.8rem 0 0;
-    color: #555;
-    line-height: 1.6;
+    gap: 1rem;
   }
 
   .error-message {
@@ -134,5 +107,15 @@ applyPageCacheHeaders(Astro.response, 'articles')
     text-align: center;
     color: #999;
     padding: 2rem;
+  }
+
+  @media (max-width: 640px) {
+    .category-container {
+      padding: 1.25rem 1rem;
+    }
+
+    .category-header h1 {
+      font-size: 1.3rem;
+    }
   }
 </style>

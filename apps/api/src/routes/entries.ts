@@ -1,7 +1,15 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { D1Database } from '@cloudflare/workers-types'
-import { getEntries, getEntryById, getEntryBySlug, updateEntry, archiveEntry, UpdateEntrySchema, getAssetsByEntryId } from '@personal-blog/shared'
+import { UpdateEntrySchema } from '@personal-blog/shared/schema'
+import {
+  getEntries,
+  getEntryById,
+  getEntryBySlug,
+  updateEntry,
+  archiveEntry,
+  getAssetsByEntryId,
+} from '@personal-blog/shared/db'
 
 interface Env {
   DB: D1Database
@@ -16,11 +24,11 @@ router.use('*', async (c, next) => {
   c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   c.header('Access-Control-Max-Age', '86400')
-  
+
   if (c.req.method === 'OPTIONS') {
     return c.text('OK', 200)
   }
-  
+
   await next()
 })
 

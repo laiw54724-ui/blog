@@ -1,0 +1,42 @@
+---
+interface Props {
+  message: string
+  href: string
+}
+
+const { message, href } = Astro.props as Props
+---
+
+<a class="system-notice" href={href}>
+  <span class="notice-icon">📢</span>
+  <span class="notice-text">{message}</span>
+</a>
+
+<style>
+  .system-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem;
+    border-radius: 10px;
+    background: #f8f6f2;
+    border: 1px solid #ece7df;
+    text-decoration: none;
+    color: #555;
+    font-size: 0.9rem;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .system-notice:hover {
+    background: #f0ece4;
+    border-color: #ddd5ca;
+  }
+
+  .notice-icon {
+    flex-shrink: 0;
+  }
+
+  .notice-text {
+    line-height: 1.5;
+  }
+</style>

@@ -21,6 +21,6 @@
     "discord.js": "^14.14.1",
     "tsx": "^4.7.0",
     "typescript": "^5.4.5",
-    "wrangler": "^3.28.0"
+    "wrangler": "^4.81.0"
   }
 }

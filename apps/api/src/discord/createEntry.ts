@@ -9,16 +9,15 @@ import {
   slugify,
   extractHashtags,
   generateExcerpt,
-  createEntry,
-  addTagsToEntry,
-} from '@personal-blog/shared'
+} from '@personal-blog/shared/utils'
+import { createEntry, addTagsToEntry } from '@personal-blog/shared/db'
 
 export interface CreateEntryInput {
   preset: CommandPreset
   content: string
   title?: string
-  selectedCategory?: string // User-selected category from Discord command option
-  entryId?: string // Pre-generated entry ID (for linking attachments)
+  selectedCategory?: string
+  entryId?: string
 }
 
 export interface CreateEntryOutput {
@@ -38,7 +37,6 @@ function extractTitle(content: string, fallback?: string): string {
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
-    // Strip markdown heading markers from each line for title consideration
     .map((l) => l.replace(/^#{1,6}\s+/, ''))
 
   const candidate =
@@ -46,7 +44,6 @@ function extractTitle(content: string, fallback?: string): string {
     lines[0]
 
   if (candidate) return candidate
-
   if (fallback) return fallback
 
   return new Intl.DateTimeFormat('zh-TW', {
@@ -98,7 +95,7 @@ async function findOrCreateTag(db: any, tagName: string): Promise<string> {
  * Unified logic for all command types
  */
 export async function createEntryFromCommand(
-  db: any, // D1 Database binding
+  db: any,
   input: CreateEntryInput
 ): Promise<CreateEntryOutput> {
   try {
@@ -122,10 +119,8 @@ export async function createEntryFromCommand(
     const tags = extractHashtags(normalizedContent)
     const excerpt = generateExcerpt(normalizedContent)
 
-    // Use selectedCategory if provided, otherwise use preset category
     const finalCategory = selectedCategory || preset.category
 
-    // Use shared createEntry (validates fields + sets published_at)
     await createEntry(db, {
       id: entryId,
       slug,
@@ -139,7 +134,6 @@ export async function createEntryFromCommand(
       source: 'discord',
     })
 
-    // Create tags and link to entry
     if (tags.length > 0) {
       const tagIds: string[] = []
       for (const tagName of tags) {

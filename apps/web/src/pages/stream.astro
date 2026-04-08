@@ -1,39 +1,24 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
-import { getPosts } from '../lib/data'
-import { formatDate } from '@personal-blog/shared'
-import { extractPlainText } from '../lib/markdown'
+import EntryCard from '../components/EntryCard.astro'
+import SystemNoticeCard from '../components/SystemNoticeCard.astro'
+import { getPosts, getArticles } from '../lib/data'
+import { buildEntryCardModels } from '../lib/presenters'
+import { buildUnifiedFeed, isSystemNotice } from '../lib/feed'
 import { applyPageCacheHeaders } from '../lib/response'
 
-const categoryLabels: Record<string, string> = {
-  journal: '日記',
-  reading: '讀書',
-  travel: '旅行',
-  place: '地點',
-}
+const [allPosts, allArticles] = await Promise.all([
+  getPosts(),
+  getArticles(),
+])
 
-// SSR: 每次請求時取最新資料
-const posts = await getPosts()
+const [postModels, articleModels] = await Promise.all([
+  buildEntryCardModels(allPosts, { excerptLength: 100 }),
+  buildEntryCardModels(allArticles, { excerptLength: 120 }),
+])
 
-const displayPosts = posts.map((post) => ({
-  ...post,
-  displayTitle: post.title?.trim() || formatDate(post.created_at),
-  displayExcerpt: extractPlainText(post.content_markdown || '', 100),
-  categoryLabel: categoryLabels[post.category] || post.category,
-}))
+const dayGroups = buildUnifiedFeed(postModels, articleModels)
 
-const groupedPosts = displayPosts.reduce((acc, post) => {
-  const dateKey = post.created_at.slice(0, 10)
-  if (!acc[dateKey]) acc[dateKey] = []
-  acc[dateKey].push(post)
-  return acc
-}, {} as Record<string, typeof displayPosts>)
-
-const groupedEntries = Object.entries(groupedPosts).sort(([a], [b]) =>
-  a < b ? 1 : -1
-)
-
-// 應用快取策略：30秒 CDN 快取 + 2 分鐘過期後仍可用
 applyPageCacheHeaders(Astro.response, 'stream')
 ---
 
@@ -46,25 +31,31 @@ applyPageCacheHeaders(Astro.response, 'stream')
 
     <div class="timeline">
       {
-        groupedEntries.length > 0 ? (
-          groupedEntries.map(([date, items]) => (
+        dayGroups.length > 0 ? (
+          dayGroups.map((group) => (
             <section class="day-group">
               <div class="day-label">
-                <span>{formatDate(date)}</span>
+                <span>{group.displayDate}</span>
               </div>
 
               <div class="day-items">
-                {items.map((post) => (
-                  <a class="timeline-item" href={`/post/${encodeURIComponent(post.slug || '')}`}>
-                    <div class="item-body">
-                      <h2 class="item-title">{post.displayTitle}</h2>
-                      {post.displayExcerpt && post.displayExcerpt !== post.displayTitle && (
-                        <p class="item-excerpt">{post.displayExcerpt}</p>
-                      )}
-                    </div>
-                    <span class="item-category">{post.categoryLabel}</span>
-                  </a>
-                ))}
+                {group.items.map((item) =>
+                  isSystemNotice(item) ? (
+                    <SystemNoticeCard message={item.message} href={item.href} />
+                  ) : (
+                    <EntryCard
+                      href={item.href}
+                      title={item.displayTitle}
+                      excerpt={item.displayExcerpt}
+                      date={item.displayDate}
+                      categoryLabel={item.categoryLabel}
+                      coverUrl={item.coverUrl}
+                      coverAlt={item.coverAlt}
+                      stats={item.metrics}
+                      variant="compact"
+                    />
+                  )
+                )}
               </div>
             </section>
           ))
@@ -128,65 +119,7 @@ applyPageCacheHeaders(Astro.response, 'stream')
   .day-items {
     display: flex;
     flex-direction: column;
-    gap: 0;
-  }
-
-  .timeline-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
-    padding: 0.85rem 0;
-    border-bottom: 1px solid #f0ece4;
-    text-decoration: none;
-    color: inherit;
-    transition: background 0.15s;
-  }
-
-  .timeline-item:hover {
-    background: #faf8f5;
-    margin: 0 -0.75rem;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-    border-radius: 6px;
-  }
-
-  .timeline-item:last-child {
-    border-bottom: none;
-  }
-
-  .item-body {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .item-title {
-    font-size: 1rem;
-    font-weight: 500;
-    line-height: 1.5;
-    margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .item-excerpt {
-    margin: 0.3rem 0 0;
-    font-size: 0.88rem;
-    color: #777;
-    line-height: 1.6;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .item-category {
-    flex-shrink: 0;
-    font-size: 0.8rem;
-    color: #999;
-    margin-top: 0.15rem;
+    gap: 0.75rem;
   }
 
   .empty-state {
@@ -202,10 +135,6 @@ applyPageCacheHeaders(Astro.response, 'stream')
 
     .stream-header h1 {
       font-size: 1.3rem;
-    }
-
-    .item-title {
-      font-size: 0.95rem;
     }
   }
 </style>

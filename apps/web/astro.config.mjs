@@ -4,10 +4,7 @@ import cloudflare from '@astrojs/cloudflare'
 export default defineConfig({
   output: 'server',
   adapter: cloudflare({
-    platformProxy: {
-      enabled: true,
-    },
-    mode: 'pages',
+    prerenderEnvironment: 'node',
   }),
   integrations: [],
 })
