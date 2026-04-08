@@ -2,8 +2,9 @@ import type { Context } from 'hono'
 import { verifyDiscordSignature } from './verify'
 import { getCommandPreset, CHINESE_TO_ENGLISH_COMMAND_MAP } from './presets'
 import { createEntryFromCommand } from './createEntry'
-import { getEntryBySlug, updateEntry, archiveEntry } from '@personal-blog/shared'
+import { getEntryBySlug, updateEntry, archiveEntry, createAsset, generateId } from '@personal-blog/shared'
 import { processAttachments } from './attachments'
+import type { PendingAsset } from './attachments'
 
 function normalizeSlug(input: string): string {
   const raw = input.trim()
@@ -15,6 +16,48 @@ function normalizeSlug(input: string): string {
     }
   } catch {}
   return decodeURIComponent(raw).trim()
+}
+
+/**
+ * Persist pending assets to D1 after the entry row exists.
+ * Returns the cover asset ID if one was created.
+ */
+async function persistPendingAssets(
+  db: any,
+  entryId: string,
+  assets: PendingAsset[]
+): Promise<string | null> {
+  let coverAssetId: string | null = null
+
+  for (const asset of assets) {
+    await createAsset(db, {
+      id: asset.id,
+      entry_id: entryId,
+      kind: asset.kind,
+      storage_key: asset.storage_key,
+      mime_type: asset.mime_type,
+      width: asset.width,
+      height: asset.height,
+      alt_text: asset.alt_text,
+      sort_order: asset.sort_order,
+    })
+
+    if (asset.kind === 'cover' && !coverAssetId) {
+      coverAssetId = asset.id
+    }
+  }
+
+  return coverAssetId
+}
+
+/**
+ * Update entry's cover_asset_id column
+ */
+async function setEntryCoverAsset(db: any, entryId: string, coverAssetId: string) {
+  await db
+    .prepare('UPDATE entries SET cover_asset_id = ? WHERE id = ?')
+    .bind(coverAssetId, entryId)
+    .run()
 }
 
 interface DiscordAttachmentResolved {
@@ -102,7 +145,6 @@ export async function handleDiscordInteraction(c: Context) {
 
     // --- Handle edit command ---
     if (commandKey === 'edit') {
-
       const slugOption = data.options?.find((opt: any) => opt.name === 'slug')
       const slug = slugOption?.value ? normalizeSlug(slugOption.value) : ''
       if (!slug) {
@@ -110,7 +152,6 @@ export async function handleDiscordInteraction(c: Context) {
       }
 
       try {
-        // Find entry by slug (no visibility filter — allow editing any own entry)
         const entry = await getEntryBySlug(db, slug)
         if (!entry) {
           return c.json({ type: 4, data: { content: `❌ 找不到 slug: ${slug}` } })
@@ -145,7 +186,6 @@ export async function handleDiscordInteraction(c: Context) {
 
     // --- Handle delete command ---
     if (commandKey === 'delete') {
-
       const slugOption = data.options?.find((opt: any) => opt.name === 'slug')
       const slug = slugOption?.value ? normalizeSlug(slugOption.value) : ''
       if (!slug) {
@@ -182,19 +222,31 @@ export async function handleDiscordInteraction(c: Context) {
       )
     }
 
-    // Extract content from command options
+    // Extract options
+    const titleOption = data.options?.find((opt: any) => opt.name === 'title')
     const contentOption = data.options?.find((opt: any) => opt.name === 'content')
-    const categoryOption = data.options?.find((opt: any) => opt.name === 'category')
+    const categoryOption =
+      data.options?.find((opt: any) => opt.name === 'category') ||
+      data.options?.find((opt: any) => opt.name === '分類')
+    const altOption = data.options?.find((opt: any) => opt.name === 'alt')
+    const coverOption = data.options?.find((opt: any) => opt.name === 'cover')
+
+    const customTitle = titleOption?.value?.trim()
     let content = contentOption?.value || ''
     const selectedCategory = categoryOption?.value
+    const altText = altOption?.value?.trim()
+    const coverMode = (coverOption?.value || 'auto') as 'auto' | 'yes' | 'no'
 
     // Collect resolved attachments from Discord
     const resolvedAttachments = data.resolved?.attachments
       ? Object.values(data.resolved.attachments)
       : []
 
+    // Pre-generate entry ID so R2 paths use the correct ID
+    const preEntryId = generateId('entry')
+
     // If there's a file attachment, process it
-    let attachmentResult = null
+    let attachmentResult: Awaited<ReturnType<typeof processAttachments>> | null = null
     if (resolvedAttachments.length > 0) {
       try {
         const bucket = (c.env as any)?.ASSETS_BUCKET
@@ -205,18 +257,12 @@ export async function handleDiscordInteraction(c: Context) {
           })
         }
 
-        // Generate entry ID early so attachments link to the correct entry
-        const { generateId } = await import('@personal-blog/shared')
-        const preEntryId = generateId('entry')
-
         attachmentResult = await processAttachments(
           resolvedAttachments,
           preEntryId,
           bucket,
-          db
+          { altText, coverMode }
         )
-        // Store the pre-generated ID so createEntryFromCommand reuses it
-        ;(attachmentResult as any)._entryId = preEntryId
 
         // If a .md/.txt file was uploaded, use its content
         if (attachmentResult.textContent) {
@@ -224,9 +270,10 @@ export async function handleDiscordInteraction(c: Context) {
         }
       } catch (error) {
         console.error('Error processing attachments:', error)
+        const errMsg = error instanceof Error ? error.message : ''
         return c.json({
           type: 4,
-          data: { content: '❌ 檔案處理失敗，請稍後重試' },
+          data: { content: `❌ 檔案處理失敗：${errMsg || '請稍後重試'}` },
         })
       }
     }
@@ -242,15 +289,37 @@ export async function handleDiscordInteraction(c: Context) {
       const result = await createEntryFromCommand(db, {
         preset,
         content: content.trim(),
+        title: customTitle,
         selectedCategory,
-        entryId: (attachmentResult as any)?._entryId,
+        entryId: preEntryId,
       })
 
       // Build response message
       let message = result.message
-      if (attachmentResult?.assets.length) {
-        message += `\n📎 已上傳 ${attachmentResult.assets.length} 個檔案`
+
+      // Persist assets after entry row exists
+      if (result.success && result.entry_id && attachmentResult?.pendingAssets?.length) {
+        try {
+          const coverAssetId = await persistPendingAssets(
+            db,
+            result.entry_id,
+            attachmentResult.pendingAssets
+          )
+
+          if (coverAssetId) {
+            await setEntryCoverAsset(db, result.entry_id, coverAssetId)
+          }
+
+          message += `\n🖼️ 已掛載 ${attachmentResult.pendingAssets.length} 張圖片`
+          if (altText) {
+            message += `\n🔤 圖片替代文字已設定`
+          }
+        } catch (error) {
+          console.error('Error persisting assets:', error)
+          message += '\n⚠️ 內文已建立，但圖片掛載到資料庫時失敗'
+        }
       }
+
       if (attachmentResult?.textContent) {
         message += `\n📄 內容已從上傳的檔案匯入`
       }

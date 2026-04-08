@@ -3,6 +3,8 @@
     "jsxImportSource": "astro/jsx",
     "jsx": "react-jsx",
     "strict": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "module": "esnext",
+    "types": ["@cloudflare/workers-types"]
   }
 }

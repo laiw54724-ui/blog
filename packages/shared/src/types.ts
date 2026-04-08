@@ -80,6 +80,10 @@ export interface Asset {
   created_at: string
 }
 
+export interface ResolvedCoverAsset extends Asset {
+  resolved_for_entry_id: string
+}
+
 export interface EntryRelation {
   id: string
   from_entry_id: string
@@ -90,4 +94,30 @@ export interface EntryRelation {
 
 export interface EntryWithTags extends Entry {
   tags: Tag[]
+}
+
+// Engagement metrics for an entry (matches entry_metrics table)
+export interface EntryMetrics {
+  entry_id: string
+  view_count: number
+  clap_count: number
+  comment_count: number
+  last_viewed_at: string | null
+}
+
+// Comment (matches comments table)
+export interface Comment {
+  id: string
+  entry_id: string
+  parent_id: string | null
+  author_name: string
+  body_markdown: string
+  status: 'visible' | 'hidden' | 'deleted'
+  created_at: string
+  updated_at: string
+}
+
+// Comment with nested children for display
+export interface CommentThread extends Comment {
+  children?: CommentThread[]
 }

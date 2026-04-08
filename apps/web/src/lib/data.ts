@@ -3,7 +3,7 @@
  * Provides centralized fetching, error handling, and caching
  */
 
-import type { Entry } from '@personal-blog/shared'
+import type { Entry, ResolvedCoverAsset, EntryMetrics } from '@personal-blog/shared'
 
 // API_BASE uses PUBLIC_API_URL environment variable (set at build time)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -259,6 +259,67 @@ export async function getAssetsByEntryId(entryId: string): Promise<any[]> {
     console.error(`Error fetching assets for entry ${entryId}:`, error)
     return []
   }
+}
+
+/**
+ * Get resolved cover assets for multiple entries, keyed by entry ID
+ */
+export async function getResolvedCoverAssetsMap(
+  entryIds: string[]
+): Promise<Record<string, ResolvedCoverAsset>> {
+  if (entryIds.length === 0) return {}
+
+  const map: Record<string, ResolvedCoverAsset> = {}
+
+  // Fetch assets for each entry in parallel
+  const results = await Promise.all(
+    entryIds.map(async (id) => {
+      try {
+        const assets = await getAssetsByEntryId(id)
+        const cover = assets.find((a: any) => a.kind === 'cover')
+        if (cover) {
+          return { id, cover: { ...cover, resolved_for_entry_id: id } as ResolvedCoverAsset }
+        }
+      } catch {}
+      return null
+    })
+  )
+
+  for (const result of results) {
+    if (result) map[result.id] = result.cover
+  }
+
+  return map
+}
+
+/**
+ * Get entry metrics for multiple entries, keyed by entry ID
+ */
+export async function getEntryMetricsMap(
+  entryIds: string[]
+): Promise<Record<string, EntryMetrics>> {
+  if (entryIds.length === 0) return {}
+
+  const map: Record<string, EntryMetrics> = {}
+
+  const results = await Promise.all(
+    entryIds.map(async (id) => {
+      try {
+        const response = await apiFetch(`/api/entries/${id}/metrics`)
+        if (!response.ok) return null
+        const { data } = await response.json()
+        return data ? { id, metrics: data as EntryMetrics } : null
+      } catch {
+        return null
+      }
+    })
+  )
+
+  for (const result of results) {
+    if (result) map[result.id] = result.metrics
+  }
+
+  return map
 }
 
 export { clearCache }

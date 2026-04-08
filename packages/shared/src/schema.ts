@@ -18,7 +18,7 @@ export const CreateEntrySchema = z.object({
   country: z.string().optional(),
   visited_at: z.string().optional(),
   rating: z.number().int().min(1).max(5).optional(),
-  revisit: z.boolean().optional(),
+  revisit: z.number().int().optional(),
   // reading
   book_title: z.string().optional(),
   book_author: z.string().optional(),

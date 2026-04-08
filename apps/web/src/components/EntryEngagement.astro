@@ -1,0 +1,31 @@
+---
+import type { EntryMetrics } from '@personal-blog/shared'
+const { metrics, onLike } = Astro.props as {
+  metrics: EntryMetrics | null
+  onLike?: () => void
+}
+---
+<div class="entry-engagement">
+  <span title="Views">👁️ {metrics?.view_count ?? 0}</span>
+  <button type="button" title="Like" onclick={onLike} aria-label="Like">
+    ❤️ {metrics?.clap_count ?? 0}
+  </button>
+  <span title="Comments">💬 {metrics?.comment_count ?? 0}</span>
+</div>
+<style>
+.entry-engagement {
+  display: flex;
+  font-size: 1.1em;
+}
+.entry-engagement button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1em;
+  padding: 0 0.2em;
+  color: #d33;
+}
+.entry-engagement button:hover {
+  color: #a00;
+}
+</style>
