@@ -1,5 +1,5 @@
-import { defineConfig } from 'astro/config'
-import cloudflare from '@astrojs/cloudflare'
+import { defineConfig } from 'astro/config';
+import cloudflare from '@astrojs/cloudflare';
 
 export default defineConfig({
   output: 'server',
@@ -7,4 +7,4 @@ export default defineConfig({
     prerenderEnvironment: 'node',
   }),
   integrations: [],
-})
+});

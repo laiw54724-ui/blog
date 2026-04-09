@@ -5,11 +5,11 @@
  */
 
 export interface CommandPreset {
-  entry_type: 'post' | 'article'
-  category: string
-  status: 'published' | 'draft'
-  visibility: 'private' | 'unlisted' | 'public'
-  description: string
+  entry_type: 'post' | 'article';
+  category: string;
+  status: 'published' | 'draft';
+  visibility: 'private' | 'unlisted' | 'public';
+  description: string;
 }
 
 /**
@@ -24,7 +24,7 @@ export const CHINESE_TO_ENGLISH_COMMAND_MAP: Record<string, string> = {
   書摘: 'reading',
   編輯: 'edit',
   刪除: 'delete',
-}
+};
 
 export const COMMAND_PRESETS: Record<string, CommandPreset> = {
   post: {
@@ -60,13 +60,13 @@ export const COMMAND_PRESETS: Record<string, CommandPreset> = {
   // restaurant: { ... }
   // diary: { ... }
   // inbox: { ... }
-}
+};
 
 /**
  * Get preset by command name
  */
 export function getCommandPreset(commandName: string): CommandPreset | null {
-  return COMMAND_PRESETS[commandName] || null
+  return COMMAND_PRESETS[commandName] || null;
 }
 
 /**
@@ -76,5 +76,5 @@ export function listCommands(): Array<{ name: string; description: string }> {
   return Object.entries(COMMAND_PRESETS).map(([name, preset]) => ({
     name,
     description: preset.description,
-  }))
+  }));
 }

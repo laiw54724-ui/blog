@@ -1,39 +1,49 @@
-import { vi } from 'vitest'
+import { vi } from 'vitest';
 
 /**
  * Create a mock D1 database that tracks all queries
  */
-export function createMockDb(data: {
-  allResults?: any[]
-  firstResult?: any
-} = {}) {
-  const queries: Array<{ sql: string; params: any[] }> = []
+export function createMockDb(
+  data: {
+    allResults?: any[];
+    firstResult?: any;
+    firstResults?: any[];
+  } = {}
+) {
+  const queries: Array<{ sql: string; params: any[] }> = [];
+  let firstCallCount = 0;
 
   const mockStatement = {
     bind: vi.fn(function (this: any, ...args: any[]) {
       // Store the bound params on the last query
       if (queries.length > 0) {
-        queries[queries.length - 1].params = args
+        queries[queries.length - 1].params = args;
       }
-      return this
+      return this;
     }),
     run: vi.fn().mockResolvedValue({ success: true }),
-    first: vi.fn().mockResolvedValue(data.firstResult ?? null),
+    first: vi.fn().mockImplementation(() => {
+      firstCallCount += 1;
+      if (data.firstResults && data.firstResults.length >= firstCallCount) {
+        return data.firstResults[firstCallCount - 1];
+      }
+      return data.firstResult ?? null;
+    }),
     all: vi.fn().mockResolvedValue({
       results: data.allResults ?? [],
     }),
-  }
+  };
 
   const db = {
     prepare: vi.fn((sql: string) => {
-      queries.push({ sql, params: [] })
-      return mockStatement
+      queries.push({ sql, params: [] });
+      return mockStatement;
     }),
     _statement: mockStatement,
     _queries: queries,
-  }
+  };
 
-  return db
+  return db;
 }
 
 /**
@@ -45,7 +55,8 @@ export function createMockEnv(db: any) {
     DISCORD_PUBLIC_KEY: 'test_public_key_for_testing',
     DISCORD_TOKEN: 'test_token',
     DISCORD_CLIENT_ID: 'test_client_id',
-  }
+    API_SECRET: 'test_secret_for_testing',
+  };
 }
 
 /**
@@ -56,7 +67,7 @@ export function createMockExecutionCtx() {
   return {
     waitUntil: vi.fn(),
     passThroughOnException: vi.fn(),
-  }
+  };
 }
 
 /**
@@ -105,4 +116,4 @@ export const sampleEntries = [
     created_at: '2026-04-07T14:00:00.000Z',
     updated_at: '2026-04-07T14:00:00.000Z',
   },
-]
+];

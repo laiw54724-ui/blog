@@ -22,28 +22,34 @@
 ## 2. 推薦技術棧
 
 ### 前端站點
+
 - **Astro**
 - 部署到 **Cloudflare Pages**
 
 理由：
+
 - 閱讀型網站速度快
 - 靜態頁面成本低
 - 易於做兩種不同的閱讀版型
 
 ### API / Bot 後端
+
 - **Cloudflare Workers**
 - 建議搭配 **Hono** 做 API routing
 
 理由：
+
 - 輕量、便宜
 - 適合處理 Discord interaction webhook
 - 易於串 D1 / R2 / AI provider
 
 ### 資料儲存
+
 - **Cloudflare D1**：文章、貼文、分類、tag、關聯
 - **Cloudflare R2**：圖片與附件
 
 ### AI 層
+
 - Provider 抽象化，先做 `AI_ENABLED` feature flag
 - 初期只做：
   - 分類
@@ -79,6 +85,7 @@ flowchart TD
 ## 4. 內容生命週期
 
 ### A. 快速貼文
+
 1. 你用 `/貼文` 或把內容貼到 Discord inbox。
 2. Worker 收到 interaction 或 message command。
 3. 若 AI 開啟，執行分類、tag、摘要。
@@ -87,6 +94,7 @@ flowchart TD
 6. 出現在 `/stream`。
 
 ### B. 文章草稿
+
 1. 你用 `/文章` 或對某則長訊息使用 `存成文章`。
 2. 存成 `entry_type = article`。
 3. 預設 `draft`。
@@ -94,6 +102,7 @@ flowchart TD
 5. 公開後出現在 `/articles`。
 
 ### C. 升格成文章
+
 1. 你對貼文按下 `升格成文章`。
 2. 系統建立新的 article draft。
 3. 原貼文與文章建立 relation。
@@ -106,16 +115,19 @@ flowchart TD
 ### 兩大維度
 
 #### entry_type
+
 - `post`
 - `article`
 
 #### category
+
 - `journal`
 - `reading`
 - `travel`
 - `place`
 
 ### 狀態
+
 - `inbox`
 - `draft`
 - `published`
@@ -123,6 +135,7 @@ flowchart TD
 - `archived`
 
 ### 可見性
+
 - `private`
 - `unlisted`
 - `public`
@@ -132,6 +145,7 @@ flowchart TD
 ## 6. 網站資訊架構
 
 ### 主要導覽
+
 - `/` 首頁
 - `/stream` 動態河道
 - `/articles` 文章河道
@@ -146,16 +160,19 @@ flowchart TD
 ### 首頁設計
 
 #### Hero 區
+
 - 一句簡短自我介紹
 - 兩個 CTA：
   - 看最新動態
   - 看整理文章
 
 #### 雙欄主體
+
 - 左：最新動態
 - 右：最新文章
 
 #### 內容入口
+
 - 日記
 - 讀書
 - 旅行
@@ -166,6 +183,7 @@ flowchart TD
 ## 7. Discord UX 設計
 
 ### Slash Commands
+
 - `/貼文`
 - `/文章`
 - `/旅記`
@@ -175,12 +193,15 @@ flowchart TD
 - `/重跑ai`
 
 ### Message Commands
+
 - `存成貼文`
 - `存成文章`
 - `升格成文章`
 
 ### 存檔回覆卡
+
 每次寫入後，bot 回一張 preview card：
+
 - 類型
 - 分類
 - 標題建議
@@ -189,6 +210,7 @@ flowchart TD
 - 可見性
 
 按鈕只放：
+
 - 公開
 - 保持草稿
 - 改分類
@@ -200,6 +222,7 @@ flowchart TD
 ## 8. AI 功能邊界
 
 ### AI 開啟時
+
 - 判斷 `entry_type`
 - 判斷 `category`
 - 產生 3-5 個 tags
@@ -209,6 +232,7 @@ flowchart TD
 - 對公開內容做隱私提醒
 
 ### AI 關閉時
+
 - 以規則處理：
   - 取第一段為摘要
   - 抽 `#hashtag`
@@ -239,6 +263,7 @@ repo/
 ## 10. MVP 開發順序
 
 ### Phase 1: 核心骨架
+
 - [ ] 建 Cloudflare Worker
 - [ ] 設 Discord interaction endpoint
 - [ ] 建 D1 schema
@@ -246,18 +271,21 @@ repo/
 - [ ] 做 `/stream` 與 `/articles`
 
 ### Phase 2: 內容寫入
+
 - [ ] `/貼文`
 - [ ] `/文章`
 - [ ] `存成文章` message command
 - [ ] 預覽卡與公開按鈕
 
 ### Phase 3: AI 與升格
+
 - [ ] AI feature flag
 - [ ] 自動分類 / tags / 摘要
 - [ ] `升格成文章`
 - [ ] 關聯多篇貼文
 
 ### Phase 4: UX 補強
+
 - [ ] `/places`
 - [ ] `/map`
 - [ ] tag 頁
@@ -269,6 +297,7 @@ repo/
 ## 11. 首版成功標準
 
 ### 你每天真的會用它的條件
+
 - 從記事本貼到 Discord 不痛苦
 - 長文不會因字數而卡住
 - 貼文與文章都能漂亮閱讀
@@ -276,8 +305,8 @@ repo/
 - AI 開關不影響基本使用
 
 ### MVP 完成定義
+
 - 可以從 Discord 發一則貼文到 `/stream`
 - 可以把一段長文存成文章草稿
 - 可以把貼文升格成文章
 - 網站手機版閱讀舒服
-

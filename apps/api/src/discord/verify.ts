@@ -1,4 +1,4 @@
-import { verifyKey } from 'discord-interactions'
+import { verifyKey } from 'discord-interactions';
 
 export async function verifyDiscordSignature(
   signature: string,
@@ -7,8 +7,8 @@ export async function verifyDiscordSignature(
   publicKey: string
 ): Promise<boolean> {
   try {
-    return verifyKey(body, signature, timestamp, publicKey)
+    return verifyKey(body, signature, timestamp, publicKey);
   } catch {
-    return false
+    return false;
   }
 }

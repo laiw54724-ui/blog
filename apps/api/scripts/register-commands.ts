@@ -1,13 +1,12 @@
-import { REST, Routes } from 'discord.js'
+import { REST, Routes } from 'discord.js';
 
-
-const token = process.env.DISCORD_TOKEN
-const clientId = process.env.DISCORD_CLIENT_ID
-const guildId = process.env.DISCORD_GUILD_ID
+const token = process.env.DISCORD_TOKEN;
+const clientId = process.env.DISCORD_CLIENT_ID;
+const guildId = process.env.DISCORD_GUILD_ID;
 
 if (!token || !clientId) {
-  console.error('Missing DISCORD_TOKEN or DISCORD_CLIENT_ID')
-  process.exit(1)
+  console.error('Missing DISCORD_TOKEN or DISCORD_CLIENT_ID');
+  process.exit(1);
 }
 
 const commands = [
@@ -166,25 +165,25 @@ const commands = [
       },
     ],
   },
-]
+];
 
-const rest = new REST({ version: '10' }).setToken(token)
+const rest = new REST({ version: '10' }).setToken(token);
 
 async function registerCommands() {
   try {
-    console.log('Started refreshing application (/) commands.')
+    console.log('Started refreshing application (/) commands.');
 
     const endpoint = guildId
       ? Routes.applicationGuildCommands(clientId, guildId)
-      : Routes.applicationCommands(clientId)
+      : Routes.applicationCommands(clientId);
 
-    await rest.put(endpoint, { body: commands })
+    await rest.put(endpoint, { body: commands });
 
-    console.log('Successfully reloaded application (/) commands.')
+    console.log('Successfully reloaded application (/) commands.');
   } catch (error) {
-    console.error(error)
-    process.exit(1)
+    console.error(error);
+    process.exit(1);
   }
 }
 
-registerCommands()
+registerCommands();

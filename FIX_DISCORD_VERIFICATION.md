@@ -21,13 +21,15 @@
 ### Step 2: 驗證 API 是否在線
 
 執行:
+
 ```powershell
 curl https://personal-blog-api.personal-blog.workers.dev/api/health
 ```
 
 應該返回:
+
 ```json
-{"status":"ok","timestamp":"..."}
+{ "status": "ok", "timestamp": "..." }
 ```
 
 ✅ 如果看到這個，API 是活的
@@ -50,10 +52,12 @@ curl https://personal-blog-api.personal-blog.workers.dev/api/health
 ### Step 4: 驗證成功的跡象
 
 ✅ **成功**:
+
 - [ ] URL 欄位旁邊出現**綠色勾勾** ✓
 - [ ] 儲存後頁面沒有錯誤訊息
 
 ❌ **失敗**:
+
 - [ ] URL 欄位旁邊出現**紅色 X** ✗
 - [ ] 看到錯誤訊息
 
@@ -64,6 +68,7 @@ curl https://personal-blog-api.personal-blog.workers.dev/api/health
 ### 可能原因 1: API 沒有回應
 
 **檢查**:
+
 ```powershell
 # 測試 API
 curl https://personal-blog-api.personal-blog.workers.dev/api/health

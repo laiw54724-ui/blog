@@ -11,8 +11,10 @@
 ### 1. API_BASE 設置問題
 
 現在 data.ts 使用:
+
 ```typescript
-const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
+const API_BASE =
+  import.meta.env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev';
 ```
 
 但在 Astro SSR 構建時，`import.meta.env` 可能未正確評估。
@@ -20,6 +22,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://personal-blog-api.pe
 ### 2. 可能的根本原因
 
 Astro SSR 在**構建時**執行 `getPosts()` 函數，此時：
+
 - `.env.local` 可能未被正確註入
 - `import.meta.env.PUBLIC_API_URL` 在構建時可能是 `undefined`
 - Fetch 可能失敗

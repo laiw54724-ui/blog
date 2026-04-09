@@ -19,6 +19,7 @@
    - [ ] 如果是紅色 X，表示驗證失敗
 
 **如果驗證失敗**:
+
 ```
 可能的原因:
 1. API 伺服器沒有回應 PING
@@ -31,11 +32,13 @@
 ### Step 2: 檢查 API 日誌 ⚠️
 
 **執行**:
+
 ```powershell
 wrangler tail personal-blog-api --lines 50
 ```
 
 **查看**:
+
 - 是否有 POST 請求到 `/api/discord/interactions`?
 - 請求返回了什麼狀態碼?
 - 有沒有錯誤訊息?
@@ -50,8 +53,9 @@ wrangler tail personal-blog-api --lines 50
 
 ```typescript
 // interactions.ts 中應該有
-if (payload.type === 1) {  // PING
-  return c.json({ type: 1 })
+if (payload.type === 1) {
+  // PING
+  return c.json({ type: 1 });
 }
 ```
 
@@ -62,16 +66,19 @@ if (payload.type === 1) {  // PING
 ### Step 4: 測試完整的命令流程
 
 **在 Discord 發送**:
+
 ```
 /貼文 content: "🧪 診斷測試"
 ```
 
 **同時執行**:
+
 ```powershell
 wrangler tail personal-blog-api --lines 50
 ```
 
 **觀察日誌中是否看到**:
+
 1. POST 請求接收
 2. 簽名驗證
 3. 命令處理
@@ -86,6 +93,7 @@ wrangler tail personal-blog-api --lines 50
 **原因**: API 沒有在 3 秒內回應
 
 **檢查**:
+
 - [ ] API 是否在線? `curl https://personal-blog-api.personal-blog.workers.dev/api/health`
 - [ ] Interactions Endpoint URL 是否在 Discord 中驗證成功?
 - [ ] API 代碼中有沒有長時間的操作阻止了回應?
@@ -94,22 +102,24 @@ wrangler tail personal-blog-api --lines 50
 
 ```typescript
 // 應該立即回應
-return c.json({ type: 5 }) // DEFERRED
+return c.json({ type: 5 }); // DEFERRED
 
 // 背景執行資料庫操作
 c.executionCtx?.waitUntil(async () => {
   // 資料庫操作
-})
+});
 ```
 
 ### 問題: 資料庫是空的 (total = 0)
 
 **可能原因**:
+
 1. ❌ Discord 沒有發送請求
 2. ❌ 簽名驗證失敗
 3. ❌ 資料庫操作失敗
 
 **排查**:
+
 - 檢查 API 日誌 (step 2)
 - 驗證 Interactions Endpoint (step 1)
 - 測試本地 API
@@ -119,13 +129,14 @@ c.executionCtx?.waitUntil(async () => {
 **即使資料保存了也可能出現**:
 
 **排查**:
+
 ```powershell
 # 1. 檢查 API 端點是否返回資料
 curl https://personal-blog-api.personal-blog.workers.dev/api/entries
 
 # 2. 手動在資料庫插入測試資料
 wrangler d1 execute personal-blog --remote --command \
-  "INSERT INTO entries (id, title, slug, content_markdown, entry_type, category, status, visibility, created_at, updated_at) 
+  "INSERT INTO entries (id, title, slug, content_markdown, entry_type, category, status, visibility, created_at, updated_at)
    VALUES ('test_123', 'Test Title', 'test-title', 'Test content', 'post', 'journal', 'published', 'public', datetime('now'), datetime('now'));"
 
 # 3. 打開網站檢查

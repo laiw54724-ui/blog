@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build outputs  
+dist/
+build/
+.astro/
+.wrangler/
+.next/
+
+# Generated
+**/*.generated.*
+
+# Test and coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config
+eslint.config.mts

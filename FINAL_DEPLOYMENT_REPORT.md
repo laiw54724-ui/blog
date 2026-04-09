@@ -47,6 +47,7 @@
 ## 🚀 已部署的組件
 
 ### ✅ 1. Discord 機器人
+
 - **應用 ID**: 1491052368626843668
 - **伺服器**: 790598892080857119
 - **已註冊命令**:
@@ -58,6 +59,7 @@
 - **狀態**: ✅ 已配置和驗證
 
 ### ✅ 2. API (Cloudflare Workers)
+
 - **URL**: `https://personal-blog-api.personal-blog.workers.dev`
 - **版本 ID**: c5501b8a-97f8-40c4-9612-8710aad94b97
 - **特性**:
@@ -75,9 +77,11 @@
   ```
 
 ### ✅ 3. 資料庫 (Cloudflare D1)
+
 - **Database ID**: 0f871179-2302-42be-a614-8f96e1692766
 - **Region**: APAC
 - **表結構**:
+
   ```sql
   entries (
     id (PK), slug, entry_type, category,
@@ -85,18 +89,20 @@
     status, visibility, source,
     published_at, created_at, updated_at
   )
-  
+
   tags (
     id (PK), name, slug
   )
-  
+
   entry_tags (
     entry_id (FK), tag_id (FK)
   )
   ```
+
 - **狀態**: ✅ 已初始化 (18 個 SQL 查詢成功)
 
 ### ✅ 4. 前端 (Cloudflare Pages)
+
 - **URL**: `https://584480c4.personal-blog-5th.pages.dev`
 - **框架**: Astro 6.1 + @astrojs/cloudflare
 - **輸出模式**: `server` (SSR)
@@ -126,16 +132,16 @@
 
 ### ✅ 已完成的 Bug 修復
 
-| 問題 | 位置 | 修復 |
-|------|------|------|
-| SQL 欄位名稱錯誤 | createEntry.ts:55 | `entry_id` → `id` ✅ |
-| 缺少 published_at | createEntry.ts | 使用共享 createEntry() ✅ |
-| Tags 表映射錯誤 | createEntry.ts | 正確使用 entry_tags 表 ✅ |
-| 重複的 data layer | api.ts/data.ts | 統一為 api.ts ✅ |
-| esbuild 版本衝突 | node_modules | 重新安裝 (628 包) ✅ |
-| Astro 模式錯誤 | astro.config.mjs | `static` → `server` ✅ |
-| CORS 阻止 Discord | index.ts | 改為 `origin: '*'` ✅ |
-| Discord 超時 | interactions.ts | 背景處理 + 立即回應 ✅ |
+| 問題              | 位置              | 修復                      |
+| ----------------- | ----------------- | ------------------------- |
+| SQL 欄位名稱錯誤  | createEntry.ts:55 | `entry_id` → `id` ✅      |
+| 缺少 published_at | createEntry.ts    | 使用共享 createEntry() ✅ |
+| Tags 表映射錯誤   | createEntry.ts    | 正確使用 entry_tags 表 ✅ |
+| 重複的 data layer | api.ts/data.ts    | 統一為 api.ts ✅          |
+| esbuild 版本衝突  | node_modules      | 重新安裝 (628 包) ✅      |
+| Astro 模式錯誤    | astro.config.mjs  | `static` → `server` ✅    |
+| CORS 阻止 Discord | index.ts          | 改為 `origin: '*'` ✅     |
+| Discord 超時      | interactions.ts   | 背景處理 + 立即回應 ✅    |
 
 ---
 
@@ -177,13 +183,15 @@ await addTagsToEntry(db, entryId, [tagId])
 
 ```typescript
 // pages/stream.astro (服務端)
-export async function getStaticPaths() { /* ... */ }
+export async function getStaticPaths() {
+  /* ... */
+}
 
-const entries = await getEntries({ 
+const entries = await getEntries({
   type: 'post',
   category: 'journal',
-  limit: 20 
-})
+  limit: 20,
+});
 
 // 每個請求都會：
 // 1. 查詢 D1 資料庫
@@ -196,18 +204,19 @@ const entries = await getEntries({
 
 ## 🌐 訪問連結
 
-| 用途 | URL |
-|------|-----|
-| **網站** | https://584480c4.personal-blog-5th.pages.dev |
-| **API** | https://personal-blog-api.personal-blog.workers.dev |
-| **API 文檔** | [見下方] |
-| **Discord 伺服器** | [790598892080857119] |
+| 用途               | URL                                                 |
+| ------------------ | --------------------------------------------------- |
+| **網站**           | https://584480c4.personal-blog-5th.pages.dev        |
+| **API**            | https://personal-blog-api.personal-blog.workers.dev |
+| **API 文檔**       | [見下方]                                            |
+| **Discord 伺服器** | [790598892080857119]                                |
 
 ---
 
 ## 📖 API 使用文檔
 
 ### 獲取所有貼文
+
 ```bash
 GET https://personal-blog-api.personal-blog.workers.dev/api/entries?type=post&limit=20
 
@@ -230,16 +239,19 @@ Response:
 ```
 
 ### 按分類查詢
+
 ```bash
 GET https://personal-blog-api.personal-blog.workers.dev/api/entries?category=travel&limit=10
 ```
 
 ### 按 Slug 查詢單篇
+
 ```bash
 GET https://personal-blog-api.personal-blog.workers.dev/api/entries/slug/today-is-happy
 ```
 
 ### 健康檢查
+
 ```bash
 GET https://personal-blog-api.personal-blog.workers.dev/api/health
 
@@ -254,30 +266,32 @@ Response:
 
 ## 🎯 功能完成度
 
-| 功能 | 進度 | 備註 |
-|------|------|------|
-| 資料庫 | ✅ 100% | D1 SQLite，已初始化 |
-| API | ✅ 100% | Workers + Hono，所有端點就緒 |
-| 前端 | ✅ 100% | Astro 6.1 SSR，Pages 部署 |
-| Discord 整合 | ✅ 95% | 命令已發送，待驗證內容存儲 |
-| 底部導覽 | ✅ 100% | 滾動自動隱藏，5 個按鈕 |
-| 讀者控制 | ✅ 100% | 字體調整 A−/A/A+，localStorage 持久 |
-| Markdown 渲染 | ✅ 100% | marked 庫，全標籤支援 |
-| 邊際快取 | ✅ 100% | 4 層策略 (30s/5m/10m/no-store) |
-| 標籤系統 | ✅ 100% | Hashtag 自動提取和建立 |
-| E2E 測試 | ⏳ 待執行 | Discord → API → DB → Website |
+| 功能          | 進度      | 備註                                |
+| ------------- | --------- | ----------------------------------- |
+| 資料庫        | ✅ 100%   | D1 SQLite，已初始化                 |
+| API           | ✅ 100%   | Workers + Hono，所有端點就緒        |
+| 前端          | ✅ 100%   | Astro 6.1 SSR，Pages 部署           |
+| Discord 整合  | ✅ 95%    | 命令已發送，待驗證內容存儲          |
+| 底部導覽      | ✅ 100%   | 滾動自動隱藏，5 個按鈕              |
+| 讀者控制      | ✅ 100%   | 字體調整 A−/A/A+，localStorage 持久 |
+| Markdown 渲染 | ✅ 100%   | marked 庫，全標籤支援               |
+| 邊際快取      | ✅ 100%   | 4 層策略 (30s/5m/10m/no-store)      |
+| 標籤系統      | ✅ 100%   | Hashtag 自動提取和建立              |
+| E2E 測試      | ⏳ 待執行 | Discord → API → DB → Website        |
 
 ---
 
 ## 🧪 待驗證項目
 
 ### 立即測試
+
 - [ ] Discord 命令是否正確保存到 D1
 - [ ] 新增的內容是否在 30 秒內出現在網站
 - [ ] 底部導覽在新 URL 是否正常工作
 - [ ] 讀者控制面板是否能調整字體
 
 ### 可選測試
+
 - [ ] 不同分類的頁面是否能正確過濾
 - [ ] 詳細頁面是否能正確查詢單篇文章
 - [ ] 邊際快取是否正確運作
@@ -291,6 +305,7 @@ Response:
 **大小**: 215.01 MB
 
 ### 包含
+
 ```
 blog-architecture-pack/
 ├── apps/
@@ -306,6 +321,7 @@ blog-architecture-pack/
 ```
 
 ### 不包含
+
 ```
 × node_modules/       (可執行 npm install 重新安裝)
 × dist/               (可執行 npm run build 重新構建)
@@ -317,12 +333,14 @@ blog-architecture-pack/
 ## 🚀 後續步驟
 
 ### 立即執行 (驗證系統)
+
 1. 在 Discord 發送 `/貼文` 命令
 2. 檢查資料庫是否保存數據
 3. 打開網站 https://584480c4.personal-blog-5th.pages.dev/stream 確認內容顯示
 4. 測試其他功能 (底部導覽、讀者控制、分類過濾)
 
 ### 可選改進 (Phase 2.3+)
+
 - [ ] 實現分類/標籤過濾 UI
 - [ ] 新增搜尋功能
 - [ ] 實現即時通知 (Discord → Website)
@@ -335,7 +353,8 @@ blog-architecture-pack/
 ## 📞 故障排查
 
 **問題**: Discord 命令無回應  
-**檢查**: 
+**檢查**:
+
 ```powershell
 # 1. 檢查 API 日誌
 wrangler tail personal-blog-api
@@ -351,6 +370,7 @@ npm run dev
 
 **問題**: 內容未出現在網站上  
 **檢查**:
+
 ```powershell
 # 1. 驗證前端 SSR 構建
 cd apps/web
@@ -367,12 +387,12 @@ curl -I https://584480c4.personal-blog-5th.pages.dev/stream
 
 ## 📊 系統性能指標
 
-| 指標 | 目標 | 當前 |
-|------|------|------|
-| API 響應時間 | <100ms | ~50ms |
-| 首屏加載 | <2s | ~1.5s |
-| D1 查詢 | <50ms | ~30ms |
-| 邊際快取命中率 | >80% | 60-70% |
+| 指標           | 目標   | 當前   |
+| -------------- | ------ | ------ |
+| API 響應時間   | <100ms | ~50ms  |
+| 首屏加載       | <2s    | ~1.5s  |
+| D1 查詢        | <50ms  | ~30ms  |
+| 邊際快取命中率 | >80%   | 60-70% |
 
 ---
 
@@ -384,7 +404,7 @@ curl -I https://584480c4.personal-blog-5th.pages.dev/stream
 ✅ **標籤系統** - 自動提取 Hashtag，自動建立標籤  
 ✅ **安全性** - Discord 簽名驗證、CORS 管制  
 ✅ **性能優化** - 4 層邊際快取、D1 優化查詢  
-✅ **開發友善** - TypeScript、統一的 data layer、完整測試  
+✅ **開發友善** - TypeScript、統一的 data layer、完整測試
 
 ---
 
@@ -392,7 +412,7 @@ curl -I https://584480c4.personal-blog-5th.pages.dev/stream
 
 **部署日期**: 2026-04-08  
 **狀態**: ✅ 完全上線  
-**負責人**: GitHub Copilot + User  
+**負責人**: GitHub Copilot + User
 
 所有組件已部署並配置完成。系統已準備好接收 Discord 命令並在網站上展示內容。
 
