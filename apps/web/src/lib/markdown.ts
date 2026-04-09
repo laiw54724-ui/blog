@@ -180,7 +180,8 @@ export function stripLeadingMarkdownTitle(content: string, title?: string): stri
 
 /**
  * Get the first meaningful paragraph from markdown content
- * After stripping title, find the first non-empty paragraph
+ * After stripping title, find the first paragraph that contains prose content
+ * (skips paragraphs that are only lists, quotes, or headings)
  */
 export function getFirstMeaningfulParagraph(content: string, maxLength?: number): string {
   if (!content) return '';
@@ -193,24 +194,59 @@ export function getFirstMeaningfulParagraph(content: string, maxLength?: number)
 
   if (paragraphs.length === 0) return '';
 
-  let paragraph = paragraphs[0];
+  // Find the first paragraph that contains meaningful prose content
+  for (const para of paragraphs) {
+    const lines = para.split(/\r?\n/).map((line) => line.trim());
 
-  // Preserve list and quote markers in plain text excerpt
-  paragraph = paragraph
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/\*\*?(.+?)\*\*?/g, '$1')
-    .replace(/_(.+?)_/g, '$1')
-    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
-    .replace(/`{1,3}(.+?)`{1,3}/g, '$1')
-    .replace(/^\s*[-*+]\s+/gm, '• ')
-    .replace(/^\s*\d+\.\s+/gm, '1. ')
-    .replace(/^\s*>\s?/gm, '「')
-    .replace(/[-*_~]{2,}/g, '')
-    .trim();
+    // Check if this paragraph is only structural (lists, quotes, headings)
+    const isStructuralOnly = lines.every(line => {
+      if (!line) return true; // empty lines are ok
+      if (/^#{1,6}\s+/.test(line)) return true; // headings
+      if (/^\s*[-*+]\s+/.test(line)) return true; // list items
+      if (/^\s*\d+\.\s+/.test(line)) return true; // numbered lists
+      if (/^\s*>\s?/.test(line)) return true; // quotes
+      return false; // regular text
+    });
 
-  if (maxLength && paragraph.length > maxLength) {
-    paragraph = paragraph.substring(0, maxLength).trim() + '...';
+    // Skip structural-only paragraphs
+    if (isStructuralOnly) continue;
+
+    let paragraph = '';
+
+    for (const line of lines) {
+      if (!line) break;
+      if (/^#{1,6}\s+/.test(line)) {
+        continue;
+      }
+
+      let normalized = line
+        .replace(/^\s*[-*+]\s+/, '')
+        .replace(/^\s*\d+\.\s+/, '')
+        .replace(/^\s*>\s?/, '')
+        .replace(/\*\*?(.+?)\*\*?/g, '$1')
+        .replace(/_(.+?)_/g, '$1')
+        .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+        .replace(/`{1,3}(.+?)`{1,3}/g, '$1')
+        .replace(/[-*_~]{2,}/g, '')
+        .trim();
+
+      if (!normalized) continue;
+
+      paragraph += (paragraph ? ' ' : '') + normalized;
+      if (maxLength && paragraph.length >= maxLength) break;
+    }
+
+    paragraph = paragraph.trim();
+
+    // If this paragraph has meaningful content, return it
+    if (paragraph) {
+      if (maxLength && paragraph.length > maxLength) {
+        paragraph = paragraph.substring(0, maxLength).trim() + '...';
+      }
+      return paragraph;
+    }
   }
 
-  return paragraph;
+  // If no meaningful paragraph found, return empty string
+  return '';
 }

@@ -54,6 +54,10 @@ applyPageCacheHeaders(Astro.response, 'detail')
     <!-- Post body: content text + images -->
     <div class="post-body">
 
+      <header class="post-title-wrapper">
+        <h1 class="post-title">{displayTitle}</h1>
+      </header>
+
       <div class="post-text markdown-content" id="postText" set:html={renderedContent} />
 
       <!-- Image gallery (FB-style) -->
@@ -126,6 +130,19 @@ applyPageCacheHeaders(Astro.response, 'detail')
     text-decoration: underline;
   }
 
+  .post-title-wrapper {
+    padding: 0 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .post-title {
+    margin: 0;
+    font-size: 1.65rem;
+    line-height: 1.2;
+    font-weight: 700;
+    color: #212121;
+  }
+
   /* ── Body ── */
   .post-body {
     background: #fff;
@@ -192,12 +209,21 @@ applyPageCacheHeaders(Astro.response, 'detail')
   .markdown-content ul,
   .markdown-content ol {
     margin: 0.75em 0;
-    padding-left: 1.5em;
+    padding-left: 1.4rem;
+    list-style-position: outside;
+  }
+
+  .markdown-content ul {
+    list-style-type: disc;
+  }
+
+  .markdown-content ol {
+    list-style-type: decimal;
   }
 
   .markdown-content li {
-    margin-bottom: 0.3em;
-    line-height: 1.7;
+    margin-bottom: 0.45em;
+    line-height: 1.75;
   }
 
   .markdown-content li > p {
