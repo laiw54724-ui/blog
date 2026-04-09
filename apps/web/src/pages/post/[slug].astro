@@ -2,7 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
 import { formatDate } from '@personal-blog/shared'
-import { renderMarkdownToHtml, stripFirstH1 } from '../../lib/markdown'
+import { renderMarkdownToHtml, stripFirstH1, extractH1Title } from '../../lib/markdown'
 import { getEntryBySlug, getAssetsByEntryId } from '../../lib/data'
 import { applyPageCacheHeaders } from '../../lib/response'
 
@@ -15,10 +15,11 @@ if (!entry) {
 
 // Strip the first H1 before rendering — it's shown separately as the page <title>
 // (but for posts, we don't show a duplicate h1 header)
-const cleanedMarkdown = stripFirstH1(entry.content_markdown || '')
+const titleFromEntry = entry.title?.replace(/^#+\s+/, '').trim()
+const titleFromContent = titleFromEntry ? null : extractH1Title(entry.content_markdown || '')
+const displayTitle = titleFromEntry || titleFromContent || formatDate(entry.created_at)
+const cleanedMarkdown = titleFromEntry || titleFromContent ? stripFirstH1(entry.content_markdown || '') : entry.content_markdown || ''
 const renderedContent = await renderMarkdownToHtml(cleanedMarkdown)
-
-const displayTitle = entry.title?.replace(/^#+\s+/, '').trim() || formatDate(entry.created_at)
 
 const assets = await getAssetsByEntryId(entry.id)
 const API_BASE = (import.meta as any).env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
@@ -53,9 +54,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
     <!-- Post body: content text + images -->
     <div class="post-body">
 
-      <!-- Collapsible text content -->
       <div class="post-text markdown-content" id="postText" set:html={renderedContent} />
-      <button class="see-more-btn" id="seeMoreBtn" hidden>繼續閱讀</button>
 
       <!-- Image gallery (FB-style) -->
       {allImages.length > 0 && (
@@ -144,41 +143,6 @@ applyPageCacheHeaders(Astro.response, 'detail')
     color: #333;
     overflow-wrap: break-word;
     word-break: break-word;
-  }
-
-  .post-text.is-collapsible {
-    max-height: 380px;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .post-text.is-collapsible::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 72px;
-    background: linear-gradient(to bottom, transparent, #fff);
-    pointer-events: none;
-  }
-
-  .see-more-btn {
-    display: block;
-    width: 100%;
-    padding: 0.6rem;
-    border: none;
-    border-top: 1px solid #f0ece4;
-    background: #faf8f5;
-    color: #0066cc;
-    font-size: 0.88rem;
-    cursor: pointer;
-    text-align: center;
-    transition: background 0.15s;
-  }
-
-  .see-more-btn:hover {
-    background: #f0ece4;
   }
 
   /* ── Markdown typography ── */
@@ -597,20 +561,6 @@ applyPageCacheHeaders(Astro.response, 'detail')
 </style>
 
 <script>
-  // ── See More ──────────────────────────────────────────────────────────────
-  const postText = document.getElementById('postText');
-  const seeMoreBtn = document.getElementById('seeMoreBtn');
-  const COLLAPSE_HEIGHT = 380;
-
-  if (postText && seeMoreBtn && postText.scrollHeight > COLLAPSE_HEIGHT + 40) {
-    postText.classList.add('is-collapsible');
-    seeMoreBtn.hidden = false;
-    seeMoreBtn.addEventListener('click', () => {
-      postText.classList.remove('is-collapsible');
-      seeMoreBtn.remove();
-    });
-  }
-
   // ── Lightbox ──────────────────────────────────────────────────────────────
   const lightbox = document.getElementById('lightbox') as HTMLElement | null;
   const lightboxImg = document.getElementById('lightboxImg') as HTMLImageElement | null;

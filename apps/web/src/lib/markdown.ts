@@ -195,17 +195,17 @@ export function getFirstMeaningfulParagraph(content: string, maxLength?: number)
 
   let paragraph = paragraphs[0];
 
-  // Remove markdown formatting for excerpt
+  // Preserve list and quote markers in plain text excerpt
   paragraph = paragraph
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/\*\*?(.+?)\*\*?/g, '$1')
     .replace(/_(.+?)_/g, '$1')
     .replace(/\[(.+?)\]\(.+?\)/g, '$1')
     .replace(/`{1,3}(.+?)`{1,3}/g, '$1')
-    .replace(/^\s*[-*+]\s+/gm, '')
-    .replace(/^\s*\d+\.\s+/gm, '')
-    .replace(/^\s*>\s?/gm, '')
-    .replace(/[-*_~]/g, '')
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/^\s*\d+\.\s+/gm, '1. ')
+    .replace(/^\s*>\s?/gm, '「')
+    .replace(/[-*_~]{2,}/g, '')
     .trim();
 
   if (maxLength && paragraph.length > maxLength) {
