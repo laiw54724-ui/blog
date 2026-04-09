@@ -27,14 +27,24 @@ export function renderCommentMarkdownSafe(input: string): string {
  * Centralized markdown to HTML conversion
  */
 
-import { marked } from 'marked';
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import remarkRehype from 'remark-rehype';
+import rehypeKatex from 'rehype-katex';
+import rehypeHighlight from 'rehype-highlight';
+import rehypeStringify from 'rehype-stringify';
 
-// Configure marked options
-marked.setOptions({
-  gfm: true,
-  breaks: true,
-  pedantic: false,
-});
+// Configure the unified processor
+const processor = unified()
+  .use(remarkParse)
+  .use(remarkGfm)
+  .use(remarkMath)
+  .use(remarkRehype, { allowDangerousHtml: false })
+  .use(rehypeKatex)
+  .use(rehypeHighlight)
+  .use(rehypeStringify);
 
 /**
  * Render markdown content to HTML
@@ -52,9 +62,9 @@ export async function renderMarkdownToHtml(markdown: string): Promise<string> {
       content = content.slice(1, -1);
     }
 
-    // Use marked to render
-    const html = await marked.parse(content);
-    return html || '';
+    // Use unified processor to render
+    const file = await processor.process(content);
+    return String(file);
   } catch (error) {
     console.error('Error rendering markdown:', error);
     // Fallback to escaped HTML

@@ -168,11 +168,29 @@ applyPageCacheHeaders(Astro.response, 'detail')
     font-weight: 600;
     line-height: 1.4;
     color: #1d1d1f;
+    position: relative;
   }
 
   .markdown-content h1 { font-size: 1.6rem; }
   .markdown-content h2 { font-size: 1.4rem; }
   .markdown-content h3 { font-size: 1.25rem; }
+
+  .markdown-content .heading-anchor {
+    color: #666;
+    text-decoration: none;
+    margin-left: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .markdown-content h1:hover .heading-anchor,
+  .markdown-content h2:hover .heading-anchor,
+  .markdown-content h3:hover .heading-anchor,
+  .markdown-content h4:hover .heading-anchor,
+  .markdown-content h5:hover .heading-anchor,
+  .markdown-content h6:hover .heading-anchor {
+    opacity: 1;
+  }
 
   .markdown-content ul,
   .markdown-content ol {
@@ -180,6 +198,10 @@ applyPageCacheHeaders(Astro.response, 'detail')
   }
 
   .markdown-content li {
+    margin-bottom: 0.5rem;
+  }
+
+  .markdown-content li > p {
     margin-bottom: 0.5rem;
   }
 
@@ -210,6 +232,9 @@ applyPageCacheHeaders(Astro.response, 'detail')
     padding-left: 1.25rem;
     margin: 1.5rem 0;
     color: #666;
+    background: #fafafa;
+    padding: 1rem 1.25rem;
+    border-radius: 4px;
   }
 
   .markdown-content a {
@@ -234,6 +259,115 @@ applyPageCacheHeaders(Astro.response, 'detail')
     border: none;
     border-top: 1px solid #e8e2d9;
     margin: 2rem 0;
+  }
+
+  /* Tables */
+  .markdown-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.9em;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    border: 1px solid #ddd;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+  }
+
+  .markdown-content th {
+    background: #f8f8f8;
+    font-weight: 600;
+  }
+
+  .markdown-content tr:nth-child(even) {
+    background: #fafafa;
+  }
+
+  /* Task lists */
+  .markdown-content input[type="checkbox"] {
+    margin-right: 0.5rem;
+  }
+
+  /* Footnotes */
+  .markdown-content .footnotes {
+    border-top: 1px solid #e8e2d9;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    font-size: 0.9em;
+  }
+
+  .markdown-content .footnotes ol {
+    margin: 0;
+    padding-left: 1.5rem;
+  }
+
+  .markdown-content .footnotes li {
+    margin-bottom: 0.5rem;
+  }
+
+  /* KaTeX styles */
+  .katex {
+    font-size: 1.1em;
+  }
+
+  .katex-display {
+    margin: 1rem 0;
+    text-align: center;
+  }
+
+  /* Highlight.js styles (GitHub theme) */
+  .hljs {
+    background: #f6f8fa;
+    color: #24292f;
+  }
+
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: #d73a49;
+  }
+
+  .hljs-built_in,
+  .hljs-type {
+    color: #6f42c1;
+  }
+
+  .hljs-number,
+  .hljs-attr,
+  .hljs-subst {
+    color: #005cc5;
+  }
+
+  .hljs-string,
+  .hljs-title,
+  .hljs-name,
+  .hljs-tag .hljs-attr {
+    color: #032f62;
+  }
+
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-addition {
+    color: #22863a;
+  }
+
+  .hljs-code,
+  .hljs-formula {
+    background: #f6f8fa;
+  }
+
+  .hljs-comment,
+  .hljs-quote {
+    color: #6a737d;
+  }
+
+  .hljs-meta,
+  .hljs-deletion {
+    color: #b31d28;
   }
 
   .article-footer {
