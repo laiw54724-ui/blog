@@ -84,11 +84,11 @@ function buildExcerpt(entry: Entry, maxLength = 120): string {
   const title = buildTitle(entry);
 
   // Use an explicit excerpt only when it's genuinely different from the title
-  const explicitExcerpt = entry.excerpt?.trim();
-  if (explicitExcerpt && explicitExcerpt !== title) {
-    return explicitExcerpt.length > maxLength
-      ? explicitExcerpt.slice(0, maxLength).trim() + '...'
-      : explicitExcerpt;
+  const rawExcerpt = entry.excerpt?.trim();
+  if (rawExcerpt && rawExcerpt !== title) {
+    // Strip markdown syntax before displaying
+    const plainExcerpt = extractPlainText(rawExcerpt, maxLength);
+    if (plainExcerpt && plainExcerpt !== title) return plainExcerpt;
   }
 
   // Strip the first H1 from content (same as the title), then get first paragraph
