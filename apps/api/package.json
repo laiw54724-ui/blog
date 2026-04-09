@@ -8,7 +8,7 @@
     "dev": "wrangler dev",
     "build": "wrangler build",
     "typecheck": "tsc --noEmit",
-    "register-commands": "tsx scripts/register-commands.ts"
+    "register-commands": "tsx src/scripts/register-commands.ts"
   },
   "dependencies": {
     "@personal-blog/shared": "*",

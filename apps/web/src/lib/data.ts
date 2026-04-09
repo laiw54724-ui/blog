@@ -292,33 +292,22 @@ export async function getResolvedCoverAssetsMap(
 }
 
 /**
- * Get entry metrics for multiple entries, keyed by entry ID
+ * Get entry metrics for multiple entries, keyed by entry ID.
+ * Uses batch endpoint to avoid N+1 requests.
  */
 export async function getEntryMetricsMap(
   entryIds: string[]
 ): Promise<Record<string, EntryMetrics>> {
   if (entryIds.length === 0) return {};
 
-  const map: Record<string, EntryMetrics> = {};
-
-  const results = await Promise.all(
-    entryIds.map(async (id) => {
-      try {
-        const response = await apiFetch(`/api/entries/${id}/metrics`);
-        if (!response.ok) return null;
-        const { data } = await response.json();
-        return data ? { id, metrics: data as EntryMetrics } : null;
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  for (const result of results) {
-    if (result) map[result.id] = result.metrics;
+  try {
+    const response = await apiFetch(`/api/entries/metrics?ids=${entryIds.join(',')}`);
+    if (!response.ok) return {};
+    const { data } = await response.json();
+    return (data as Record<string, EntryMetrics>) ?? {};
+  } catch {
+    return {};
   }
-
-  return map;
 }
 
 export { clearCache };

@@ -57,6 +57,23 @@ export async function getEntries(
 }
 
 /**
+ * Get recent entries for management UI (includes all statuses except deleted)
+ */
+export async function getRecentEntries(db: D1Database, limit = 5) {
+  const result = await db
+    .prepare(
+      `SELECT id, slug, title, entry_type, category, status, visibility, created_at
+       FROM entries
+       WHERE status != 'archived'
+       ORDER BY created_at DESC
+       LIMIT ?`
+    )
+    .bind(limit)
+    .all();
+  return result.results || [];
+}
+
+/**
  * Get entry by ID
  */
 export async function getEntryById(db: D1Database, id: string) {
@@ -275,4 +292,85 @@ export async function getAssetsByEntryId(db: D1Database, entryId: string) {
     .bind(entryId)
     .all();
   return result.results || [];
+}
+
+/**
+ * Get visible comments for an entry
+ */
+export async function getCommentsByEntryId(db: D1Database, entryId: string) {
+  const result = await db
+    .prepare(
+      "SELECT * FROM comments WHERE entry_id = ? AND status = 'visible' ORDER BY created_at ASC"
+    )
+    .bind(entryId)
+    .all();
+  return result.results || [];
+}
+
+/**
+ * Create a comment
+ */
+export async function createComment(
+  db: D1Database,
+  comment: {
+    id: string;
+    entry_id: string;
+    author_name: string;
+    body_markdown: string;
+    parent_id?: string | null;
+  }
+) {
+  const now = new Date().toISOString();
+  return await db
+    .prepare(
+      `INSERT INTO comments (id, entry_id, parent_id, author_name, body_markdown, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'visible', ?, ?)`
+    )
+    .bind(
+      comment.id,
+      comment.entry_id,
+      comment.parent_id || null,
+      comment.author_name,
+      comment.body_markdown,
+      now,
+      now
+    )
+    .run();
+}
+
+/**
+ * Check rate limit: returns true if allowed, false if throttled.
+ * Updates the timestamp when allowed.
+ * cooldownSeconds: minimum seconds between comments per identifier.
+ */
+export async function checkAndUpdateRateLimit(
+  db: D1Database,
+  identifier: string,
+  cooldownSeconds = 60
+): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT last_comment_at FROM comment_rate_limits WHERE identifier = ?')
+    .bind(identifier)
+    .first<{ last_comment_at: string }>();
+
+  const now = new Date();
+
+  if (row) {
+    const last = new Date(row.last_comment_at);
+    const elapsed = (now.getTime() - last.getTime()) / 1000;
+    if (elapsed < cooldownSeconds) {
+      return false;
+    }
+    await db
+      .prepare('UPDATE comment_rate_limits SET last_comment_at = ? WHERE identifier = ?')
+      .bind(now.toISOString(), identifier)
+      .run();
+  } else {
+    await db
+      .prepare('INSERT INTO comment_rate_limits (identifier, last_comment_at) VALUES (?, ?)')
+      .bind(identifier, now.toISOString())
+      .run();
+  }
+
+  return true;
 }

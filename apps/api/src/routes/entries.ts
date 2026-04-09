@@ -19,20 +19,6 @@ interface Env {
 
 const router = new Hono<{ Bindings: Env }>();
 
-// Add CORS headers to all responses
-router.use('*', async (c, next) => {
-  c.header('Access-Control-Allow-Origin', '*');
-  c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  c.header('Access-Control-Max-Age', '86400');
-
-  if (c.req.method === 'OPTIONS') {
-    return c.text('OK', 200);
-  }
-
-  await next();
-});
-
 // GET /api/entries - List entries
 router.get('/', async (c) => {
   const db = c.env?.DB;
@@ -61,6 +47,40 @@ router.get('/', async (c) => {
   } catch (error) {
     console.error('Error fetching entries:', error);
     return c.json({ error: 'Failed to fetch entries' }, 500);
+  }
+});
+
+// GET /api/entries/metrics?ids=id1,id2,... - Batch fetch metrics (fixes N+1)
+router.get('/metrics', async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: 'Database not configured' }, 500);
+
+  const raw = c.req.query('ids') || '';
+  const ids = raw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50);
+  if (ids.length === 0) return c.json({ data: {} });
+
+  try {
+    const placeholders = ids.map(() => '?').join(',');
+    const result = await db
+      .prepare(`SELECT * FROM entry_metrics WHERE entry_id IN (${placeholders})`)
+      .bind(...ids)
+      .all();
+
+    const map: Record<string, any> = {};
+    for (const row of (result.results || []) as any[]) {
+      map[row.entry_id] = row;
+    }
+    // Fill zeros for entries with no metrics yet
+    for (const id of ids) {
+      if (!map[id]) {
+        map[id] = { entry_id: id, view_count: 0, clap_count: 0, comment_count: 0, last_viewed_at: null };
+      }
+    }
+
+    return c.json({ data: map });
+  } catch (error) {
+    console.error('Error fetching batch metrics:', error);
+    return c.json({ error: 'Failed to fetch metrics' }, 500);
   }
 });
 
@@ -122,6 +142,34 @@ router.get('/:id/assets', async (c) => {
   } catch (error) {
     console.error('Error fetching assets:', error);
     return c.json({ error: 'Failed to fetch assets' }, 500);
+  }
+});
+
+// GET /api/entries/:id/metrics
+router.get('/:id/metrics', async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: 'Database not configured' }, 500);
+
+  const id = c.req.param('id');
+
+  try {
+    const metrics = await db
+      .prepare('SELECT * FROM entry_metrics WHERE entry_id = ?')
+      .bind(id)
+      .first();
+
+    return c.json({
+      data: metrics ?? {
+        entry_id: id,
+        view_count: 0,
+        clap_count: 0,
+        comment_count: 0,
+        last_viewed_at: null,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching metrics:', error);
+    return c.json({ error: 'Failed to fetch metrics' }, 500);
   }
 });
 
@@ -219,6 +267,38 @@ router.delete('/:id/hard', async (c) => {
   } catch (error) {
     console.error('Error hard deleting entry:', error);
     return c.json({ error: 'Failed to delete entry' }, 500);
+  }
+});
+
+// GET /api/entries/search?q=keyword
+router.get('/search', async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: 'Database not configured' }, 500);
+
+  const q = (c.req.query('q') || '').trim();
+  if (!q) return c.json({ data: [], count: 0 });
+  if (q.length > 100) return c.json({ error: 'Query too long' }, 400);
+
+  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50);
+  const like = `%${q}%`;
+
+  try {
+    const result = await db
+      .prepare(
+        `SELECT * FROM entries
+         WHERE status = 'published' AND visibility = 'public'
+           AND (title LIKE ? OR content_markdown LIKE ? OR excerpt LIKE ?)
+         ORDER BY published_at DESC
+         LIMIT ?`
+      )
+      .bind(like, like, like, limit)
+      .all();
+
+    const data = result.results || [];
+    return c.json({ data, count: data.length });
+  } catch (error) {
+    console.error('Error searching entries:', error);
+    return c.json({ error: 'Search failed' }, 500);
   }
 });
 

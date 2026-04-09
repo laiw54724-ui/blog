@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { handleDiscordInteraction } from './discord/interactions';
 import entriesRouter from './routes/entries';
+import commentsRouter from './routes/comments';
 
 const app = new Hono();
 
@@ -21,6 +22,7 @@ app.post('/api/discord/interactions', handleDiscordInteraction);
 
 // API routes
 app.route('/api/entries', entriesRouter);
+app.route('/api/entries/:id/comments', commentsRouter);
 
 // Serve assets from R2
 app.get('/api/assets/*', async (c: Context) => {

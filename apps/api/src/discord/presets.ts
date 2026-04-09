@@ -22,8 +22,8 @@ export const CHINESE_TO_ENGLISH_COMMAND_MAP: Record<string, string> = {
   文章: 'article',
   旅記: 'travel',
   書摘: 'reading',
-  編輯: 'edit',
-  刪除: 'delete',
+  我的文章: 'list',
+  附圖: 'attach',
 };
 
 export const COMMAND_PRESETS: Record<string, CommandPreset> = {

@@ -1,108 +1,18 @@
 import type { Context } from 'hono';
 import { verifyDiscordSignature } from './verify';
-import { getCommandPreset, CHINESE_TO_ENGLISH_COMMAND_MAP } from './presets';
-import { createEntryFromCommand } from './createEntry';
+import { CHINESE_TO_ENGLISH_COMMAND_MAP, getCommandPreset } from './presets';
+import { openCreateModal } from './handlers/create';
+import { handleCreateModal, handleEditModal } from './handlers/modal';
+import { sendListFollowup } from './handlers/list';
+import { handleComponent } from './handlers/component';
+import { getEntryBySlug, createAsset } from '@personal-blog/shared/db';
 import { generateId } from '@personal-blog/shared';
-import { getEntryBySlug, updateEntry, archiveEntry, createAsset } from '@personal-blog/shared/db';
 import { processAttachments } from './attachments';
-import type { PendingAsset } from './attachments';
-
-function normalizeSlug(input: string): string {
-  const raw = input.trim();
-  try {
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      const url = new URL(raw);
-      const parts = url.pathname.split('/').filter(Boolean);
-      return decodeURIComponent(parts[parts.length - 1] || '').trim();
-    }
-  } catch {}
-  return decodeURIComponent(raw).trim();
-}
-
-/**
- * Persist pending assets to D1 after the entry row exists.
- * Returns the cover asset ID if one was created.
- */
-async function persistPendingAssets(
-  db: any,
-  entryId: string,
-  assets: PendingAsset[]
-): Promise<string | null> {
-  let coverAssetId: string | null = null;
-
-  for (const asset of assets) {
-    await createAsset(db, {
-      id: asset.id,
-      entry_id: entryId,
-      kind: asset.kind,
-      storage_key: asset.storage_key,
-      mime_type: asset.mime_type,
-      width: asset.width,
-      height: asset.height,
-      alt_text: asset.alt_text,
-      sort_order: asset.sort_order,
-    });
-
-    if (asset.kind === 'cover' && !coverAssetId) {
-      coverAssetId = asset.id;
-    }
-  }
-
-  return coverAssetId;
-}
-
-/**
- * Update entry's cover_asset_id column
- */
-async function setEntryCoverAsset(db: any, entryId: string, coverAssetId: string) {
-  await db
-    .prepare('UPDATE entries SET cover_asset_id = ? WHERE id = ?')
-    .bind(coverAssetId, entryId)
-    .run();
-}
-
-interface DiscordAttachmentResolved {
-  id: string;
-  filename: string;
-  size: number;
-  url: string;
-  content_type?: string;
-  width?: number;
-  height?: number;
-}
-
-interface DiscordInteractionData {
-  name: string;
-  options?: Array<{
-    name: string;
-    value: string;
-    type: number;
-  }>;
-  resolved?: {
-    attachments?: Record<string, DiscordAttachmentResolved>;
-  };
-}
-
-interface DiscordUser {
-  id: string;
-  username: string;
-}
-
-interface DiscordInteractionPayload {
-  type: number;
-  data?: DiscordInteractionData;
-  member?: {
-    user: DiscordUser;
-  };
-  user?: DiscordUser;
-  channel_id?: string;
-  guild_id?: string;
-}
 
 export async function handleDiscordInteraction(c: Context) {
+  // ── Verify signature ─────────────────────────────────────────────────────
   const signature = c.req.header('x-signature-ed25519');
   const timestamp = c.req.header('x-signature-timestamp');
-
   if (!signature || !timestamp) {
     return c.json({ error: 'Missing signature headers' }, 401);
   }
@@ -112,230 +22,143 @@ export async function handleDiscordInteraction(c: Context) {
     signature,
     timestamp,
     body,
-    c.env.DISCORD_PUBLIC_KEY
+    (c.env as any).DISCORD_PUBLIC_KEY
   );
-
   if (!isValid) {
     return c.json({ error: 'Invalid signature' }, 401);
   }
 
-  const payload: DiscordInteractionPayload = JSON.parse(body);
-  const db = c.env?.DB;
+  const payload = JSON.parse(body);
+  const db = (c.env as any)?.DB;
+  if (!db) return c.json({ error: 'Database not configured' }, 500);
 
-  if (!db) {
-    return c.json({ error: 'Database not configured' }, 500);
-  }
-
-  // Handle PING
+  // ── 1. PING ───────────────────────────────────────────────────────────────
   if (payload.type === 1) {
     return c.json({ type: 1 });
   }
 
-  // Handle APPLICATION_COMMAND
+  // ── 2. APPLICATION_COMMAND ────────────────────────────────────────────────
   if (payload.type === 2) {
-    const data = payload.data;
-    const user = payload.member?.user || payload.user;
+    const name: string = payload.data?.name ?? '';
+    const commandKey = CHINESE_TO_ENGLISH_COMMAND_MAP[name] || name;
 
-    if (!data || !user) {
-      return c.json({ error: 'Invalid interaction data' }, 400);
+    // /我的文章 — deferred ephemeral, then follow-up via REST
+    if (commandKey === 'list') {
+      const appId = (c.env as any)?.DISCORD_APPLICATION_ID;
+      const discordToken = (c.env as any)?.DISCORD_TOKEN;
+      const token: string = payload.token;
+
+      if (appId && discordToken && token) {
+        (c.executionCtx as any).waitUntil(
+          sendListFollowup(db, appId, token, discordToken)
+        );
+      }
+
+      // Respond immediately so Discord doesn't timeout
+      return c.json({ type: 5, data: { flags: 64 } });
     }
 
-    const commandName = data.name;
-    // Convert Chinese command name to English key
-    const commandKey = CHINESE_TO_ENGLISH_COMMAND_MAP[commandName] || commandName;
+    // /附圖 — attach image(s) to an existing entry by slug
+    if (commandKey === 'attach') {
+      const slugOpt = payload.data?.options?.find((o: any) => o.name === 'slug');
+      const altOpt = payload.data?.options?.find((o: any) => o.name === 'alt');
+      const slug = slugOpt?.value?.trim();
 
-    // --- Handle edit command ---
-    if (commandKey === 'edit') {
-      const slugOption = data.options?.find((opt: any) => opt.name === 'slug');
-      const slug = slugOption?.value ? normalizeSlug(slugOption.value) : '';
       if (!slug) {
-        return c.json({ type: 4, data: { content: '❌ 請提供文章的 slug' } });
+        return c.json({ type: 4, data: { content: '❌ 請提供文章 slug', flags: 64 } });
+      }
+
+      const entry = await getEntryBySlug(db, slug);
+      if (!entry) {
+        return c.json({ type: 4, data: { content: `❌ 找不到 slug: ${slug}`, flags: 64 } });
+      }
+
+      const entryId = (entry as any).id;
+      const resolvedAttachments = payload.data?.resolved?.attachments
+        ? Object.values(payload.data.resolved.attachments)
+        : [];
+
+      if (resolvedAttachments.length === 0) {
+        return c.json({ type: 4, data: { content: '❌ 請附上至少一張圖片', flags: 64 } });
+      }
+
+      const bucket = (c.env as any)?.ASSETS_BUCKET;
+      if (!bucket) {
+        return c.json({ type: 4, data: { content: '❌ R2 bucket 未設定', flags: 64 } });
       }
 
       try {
-        const entry = await getEntryBySlug(db, slug);
-        if (!entry) {
-          return c.json({ type: 4, data: { content: `❌ 找不到 slug: ${slug}` } });
-        }
-
-        const fields: Record<string, string> = {};
-        const titleOpt = data.options?.find((opt: any) => opt.name === 'title');
-        const contentOpt = data.options?.find((opt: any) => opt.name === 'content');
-        const statusOpt = data.options?.find((opt: any) => opt.name === 'status');
-        const visibilityOpt = data.options?.find((opt: any) => opt.name === 'visibility');
-
-        if (titleOpt?.value) fields.title = titleOpt.value;
-        if (contentOpt?.value) fields.content_markdown = contentOpt.value;
-        if (statusOpt?.value) fields.status = statusOpt.value;
-        if (visibilityOpt?.value) fields.visibility = visibilityOpt.value;
-
-        if (Object.keys(fields).length === 0) {
-          return c.json({ type: 4, data: { content: '❌ 請提供至少一個要修改的欄位' } });
-        }
-
-        await updateEntry(db, (entry as any).id, fields);
-        const changedFields = Object.keys(fields).join(', ');
-        return c.json({
-          type: 4,
-          data: { content: `✅ 已更新「${(entry as any).title}」\n修改欄位: ${changedFields}` },
+        const result = await processAttachments(resolvedAttachments as any[], entryId, bucket, {
+          altText: altOpt?.value?.trim(),
+          coverMode: 'auto',
         });
-      } catch (error) {
-        console.error('Error editing entry:', error);
-        return c.json({ type: 4, data: { content: '❌ 編輯失敗，請稍後重試' } });
-      }
-    }
 
-    // --- Handle delete command ---
-    if (commandKey === 'delete') {
-      const slugOption = data.options?.find((opt: any) => opt.name === 'slug');
-      const slug = slugOption?.value ? normalizeSlug(slugOption.value) : '';
-      if (!slug) {
-        return c.json({ type: 4, data: { content: '❌ 請提供文章的 slug' } });
-      }
-
-      try {
-        const entry = await getEntryBySlug(db, slug);
-        if (!entry) {
-          return c.json({ type: 4, data: { content: `❌ 找不到 slug: ${slug}` } });
-        }
-
-        await archiveEntry(db, (entry as any).id);
-        return c.json({
-          type: 4,
-          data: {
-            content: `🗑️ 已封存「${(entry as any).title}」\n（狀態改為 archived，不會顯示在網站上）`,
-          },
-        });
-      } catch (error) {
-        console.error('Error deleting entry:', error);
-        return c.json({ type: 4, data: { content: '❌ 刪除失敗，請稍後重試' } });
-      }
-    }
-
-    // --- Handle create commands (post, article, travel, reading) ---
-    const preset = getCommandPreset(commandKey);
-
-    if (!preset) {
-      return c.json(
-        {
-          type: 4,
-          data: { content: `❌ 未知指令: ${commandName}` },
-        },
-        400
-      );
-    }
-
-    // Extract options
-    const titleOption = data.options?.find((opt: any) => opt.name === 'title');
-    const contentOption = data.options?.find((opt: any) => opt.name === 'content');
-    const categoryOption =
-      data.options?.find((opt: any) => opt.name === 'category') ||
-      data.options?.find((opt: any) => opt.name === '分類');
-    const altOption = data.options?.find((opt: any) => opt.name === 'alt');
-    const coverOption = data.options?.find((opt: any) => opt.name === 'cover');
-
-    const customTitle = titleOption?.value?.trim();
-    let content = contentOption?.value || '';
-    const selectedCategory = categoryOption?.value;
-    const altText = altOption?.value?.trim();
-    const coverMode = (coverOption?.value || 'auto') as 'auto' | 'yes' | 'no';
-
-    // Collect resolved attachments from Discord
-    const resolvedAttachments = data.resolved?.attachments
-      ? Object.values(data.resolved.attachments)
-      : [];
-
-    // Pre-generate entry ID so R2 paths use the correct ID
-    const preEntryId = generateId('entry');
-
-    // If there's a file attachment, process it
-    let attachmentResult: Awaited<ReturnType<typeof processAttachments>> | null = null;
-    if (resolvedAttachments.length > 0) {
-      try {
-        const bucket = (c.env as any)?.ASSETS_BUCKET;
-        if (!bucket) {
-          return c.json({
-            type: 4,
-            data: { content: '❌ 檔案儲存未設定（R2 bucket 未綁定）' },
+        for (const asset of result.pendingAssets) {
+          await createAsset(db, {
+            id: asset.id,
+            entry_id: entryId,
+            kind: asset.kind,
+            storage_key: asset.storage_key,
+            mime_type: asset.mime_type,
+            width: asset.width,
+            height: asset.height,
+            alt_text: asset.alt_text,
+            sort_order: asset.sort_order,
           });
         }
 
-        attachmentResult = await processAttachments(resolvedAttachments, preEntryId, bucket, {
-          altText,
-          coverMode,
-        });
-
-        // If a .md/.txt file was uploaded, use its content
-        if (attachmentResult.textContent) {
-          content = attachmentResult.textContent;
+        // Set first cover asset if none set yet
+        if (result.pendingAssets.some((a) => a.kind === 'cover') && !(entry as any).cover_asset_id) {
+          const coverId = result.pendingAssets.find((a) => a.kind === 'cover')!.id;
+          await db.prepare('UPDATE entries SET cover_asset_id = ? WHERE id = ?').bind(coverId, entryId).run();
         }
-      } catch (error) {
-        console.error('Error processing attachments:', error);
-        const errMsg = error instanceof Error ? error.message : '';
+
         return c.json({
           type: 4,
-          data: { content: `❌ 檔案處理失敗：${errMsg || '請稍後重試'}` },
+          data: {
+            content: `🖼️ 已為「${(entry as any).title || slug}」附加 ${result.pendingAssets.length} 張圖片`,
+            flags: 64,
+          },
         });
+      } catch (error) {
+        console.error('Attach error:', error);
+        return c.json({ type: 4, data: { content: '❌ 圖片上傳失敗，請稍後再試', flags: 64 } });
       }
     }
 
-    if (!content || content.trim().length === 0) {
-      return c.json({
-        type: 4,
-        data: { content: '❌ 請提供內容（輸入文字或上傳 .md/.txt 檔案）' },
-      });
+    // /貼文 /文章 /旅記 /書摘 — open create modal
+    const preset = getCommandPreset(commandKey);
+    if (preset) {
+      return c.json(openCreateModal(preset, commandKey));
     }
 
-    try {
-      const result = await createEntryFromCommand(db, {
-        preset,
-        content: content.trim(),
-        title: customTitle,
-        selectedCategory,
-        entryId: preEntryId,
-      });
+    return c.json({ type: 4, data: { content: `❌ 未知指令: ${name}`, flags: 64 } });
+  }
 
-      // Build response message
-      let message = result.message;
+  // ── 3. MESSAGE_COMPONENT (button clicks and select menus) ────────────────
+  if (payload.type === 3) {
+    const customId: string = payload.data?.custom_id ?? '';
+    const values: string[] | undefined = payload.data?.values;
+    const response = await handleComponent(db, customId, values);
+    return c.json(response);
+  }
 
-      // Persist assets after entry row exists
-      if (result.success && result.entry_id && attachmentResult?.pendingAssets?.length) {
-        try {
-          const coverAssetId = await persistPendingAssets(
-            db,
-            result.entry_id,
-            attachmentResult.pendingAssets
-          );
+  // ── 5. MODAL_SUBMIT ───────────────────────────────────────────────────────
+  if (payload.type === 5) {
+    const customId: string = payload.data?.custom_id ?? '';
+    const components = payload.data?.components ?? [];
 
-          if (coverAssetId) {
-            await setEntryCoverAsset(db, result.entry_id, coverAssetId);
-          }
-
-          message += `\n🖼️ 已掛載 ${attachmentResult.pendingAssets.length} 張圖片`;
-          if (altText) {
-            message += `\n🔤 圖片替代文字已設定`;
-          }
-        } catch (error) {
-          console.error('Error persisting assets:', error);
-          message += '\n⚠️ 內文已建立，但圖片掛載到資料庫時失敗';
-        }
-      }
-
-      if (attachmentResult?.textContent) {
-        message += `\n📄 內容已從上傳的檔案匯入`;
-      }
-
-      return c.json({
-        type: 4,
-        data: { content: message },
-      });
-    } catch (error) {
-      console.error('Error handling command:', error);
-      return c.json({
-        type: 4,
-        data: { content: '❌ 建立失敗，請稍後重試' },
-      });
+    if (customId.startsWith('create:')) {
+      const commandKey = customId.slice('create:'.length);
+      return c.json(await handleCreateModal(db, commandKey, components));
     }
+
+    if (customId.startsWith('edit_modal:')) {
+      const entryId = customId.slice('edit_modal:'.length);
+      return c.json(await handleEditModal(db, entryId, components));
+    }
+
+    return c.json({ type: 4, data: { content: '❌ 未知的表單提交', flags: 64 } });
   }
 
   return c.json({ error: 'Unhandled interaction type' }, 400);

@@ -2,7 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(git -C \"/c/Users/User/Desktop/blog-architecture-pack\" log --oneline -5)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(wc -l /Users/wen/Documents/dev/blog/packages/shared/src/*.ts)",
+      "Bash(npx vitest:*)",
+      "Bash(wc -l /Users/wen/Documents/dev/blog/apps/api/src/__tests__/*.ts)",
+      "Bash(wrangler whoami:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(DISCORD_CLIENT_ID=1491052368626843668 npx tsx:*)",
+      "Bash(~/.nvm/versions/node/v22.22.2/bin/node --version)",
+      "Bash(~/.nvm/versions/node/v22.22.2/bin/npx astro:*)",
+      "Bash(export PATH=\"/Users/wen/.nvm/versions/node/v22.22.2/bin:$PATH\")",
+      "Bash(npx --yes astro build)",
+      "Bash(ls /Users/wen/Documents/dev/blog/*.config.ts)"
     ]
   }
 }
