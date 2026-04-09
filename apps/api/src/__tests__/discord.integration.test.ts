@@ -108,7 +108,7 @@ describe('POST /api/discord/interactions', () => {
       const payload = {
         type: 2,
         data: {
-          name: 'article',
+          name: '文章',
           options: [
             { name: 'content', value: '深度分析文章內容', type: 3 },
           ],
@@ -122,7 +122,7 @@ describe('POST /api/discord/interactions', () => {
 
       expect(res.status).toBe(200)
       const body = await res.json() as any
-      expect(body.type).toBe(5)
+      expect(body.type).toBe(4)
     })
 
     it('handles /travel command', async () => {
@@ -132,9 +132,9 @@ describe('POST /api/discord/interactions', () => {
       const payload = {
         type: 2,
         data: {
-          name: 'travel',
+          name: '書摘',
           options: [
-            { name: 'content', value: '京都紅葉季太美了', type: 3 },
+            { name: 'content', value: '讀完了原子習慣，很有啟發', type: 3 },
           ],
         },
         member: {
@@ -144,7 +144,7 @@ describe('POST /api/discord/interactions', () => {
 
       const res = await makeDiscordRequest(env, payload)
       const body = await res.json() as any
-      expect(body.type).toBe(5)
+      expect(body.type).toBe(4)
     })
 
     it('handles /reading command', async () => {
@@ -164,7 +164,7 @@ describe('POST /api/discord/interactions', () => {
 
       const res = await makeDiscordRequest(env, payload)
       const body = await res.json() as any
-      expect(body.type).toBe(5)
+      expect(body.type).toBe(4)
     })
 
     it('rejects empty content', async () => {

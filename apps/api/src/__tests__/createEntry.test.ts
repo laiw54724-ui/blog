@@ -4,15 +4,25 @@ import type { CommandPreset } from '../discord/presets'
 
 function createMockDb() {
   const mockRun = vi.fn().mockResolvedValue({ success: true })
-  const mockFirst = vi.fn().mockResolvedValue(null) // tag not found by default
-  const mockStatement = {
+  let firstCallCount = 0
+  const mockFirst = vi.fn().mockImplementation(() => {
+    firstCallCount++
+    // First call (slug check) returns null
+    if (firstCallCount === 1) return null
+    // Second call (first tag check) returns existing tag
+    if (firstCallCount === 2) return { id: 'tag_existing' }
+    // Third call (second tag check) returns null
+    return null
+  })
+
+  const createMockStatement = () => ({
     bind: vi.fn().mockReturnThis(),
     run: mockRun,
     first: mockFirst,
-  }
+  })
+
   return {
-    prepare: vi.fn().mockReturnValue(mockStatement),
-    _statement: mockStatement,
+    prepare: vi.fn().mockImplementation(() => createMockStatement()),
     _mockRun: mockRun,
     _mockFirst: mockFirst,
   }
@@ -65,12 +75,15 @@ describe('createEntryFromCommand', () => {
       content: 'First Line Title\nRest of the content',
     })
 
-    // First prepare call is the INSERT INTO entries
-    const insertSql = db.prepare.mock.calls[0][0]
-    expect(insertSql).toContain('INSERT INTO entries')
+    // Find the INSERT INTO entries call
+    const insertCallIndex = db.prepare.mock.calls.findIndex(([sql]) =>
+      sql.includes('INSERT INTO entries')
+    )
+    expect(insertCallIndex).toBeGreaterThanOrEqual(0)
 
-    // Check bind args: id, slug, entry_type, category, title, ...
-    const bindArgs = db._statement.bind.mock.calls[0]
+    // Get the statement for this call and check its bind calls
+    const statement = db.prepare.mock.results[insertCallIndex].value
+    const bindArgs = statement.bind.mock.calls[0]
     expect(bindArgs[4]).toBe('First Line Title') // title is at index 4
   })
 
@@ -82,7 +95,11 @@ describe('createEntryFromCommand', () => {
       title: 'Custom Title',
     })
 
-    const bindArgs = db._statement.bind.mock.calls[0]
+    const insertCallIndex = db.prepare.mock.calls.findIndex(([sql]) =>
+      sql.includes('INSERT INTO entries')
+    )
+    const statement = db.prepare.mock.results[insertCallIndex].value
+    const bindArgs = statement.bind.mock.calls[0]
     expect(bindArgs[4]).toBe('Custom Title')
   })
 
@@ -93,7 +110,10 @@ describe('createEntryFromCommand', () => {
       content: 'Test content here',
     })
 
-    const insertSql = db.prepare.mock.calls[0][0]
+    const insertCallIndex = db.prepare.mock.calls.findIndex(([sql]) =>
+      sql.includes('INSERT INTO entries')
+    )
+    const insertSql = db.prepare.mock.calls[insertCallIndex][0]
     // Should NOT contain entry_id as column (only id)
     expect(insertSql).not.toMatch(/entry_id,/)
     expect(insertSql).toContain('id,')
@@ -106,7 +126,10 @@ describe('createEntryFromCommand', () => {
       content: 'Test content here',
     })
 
-    const insertSql = db.prepare.mock.calls[0][0]
+    const insertCallIndex = db.prepare.mock.calls.findIndex(([sql]) =>
+      sql.includes('INSERT INTO entries')
+    )
+    const insertSql = db.prepare.mock.calls[insertCallIndex][0]
     expect(insertSql).toContain('published_at')
   })
 
@@ -176,7 +199,11 @@ describe('createEntryFromCommand', () => {
       content: '京都的秋天真美',
     })
 
-    const bindArgs = db._statement.bind.mock.calls[0]
+    const insertCallIndex = db.prepare.mock.calls.findIndex(([sql]) =>
+      sql.includes('INSERT INTO entries')
+    )
+    const statement = db.prepare.mock.results[insertCallIndex].value
+    const bindArgs = statement.bind.mock.calls[0]
     // entry_type at index 2, category at index 3
     expect(bindArgs[2]).toBe('post')
     expect(bindArgs[3]).toBe('travel')

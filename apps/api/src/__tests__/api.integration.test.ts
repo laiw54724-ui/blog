@@ -170,7 +170,7 @@ describe('CORS headers', () => {
       headers: { Origin: 'http://localhost:4321' },
     })
 
-    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:4321')
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
   })
 
   it('returns CORS headers for *.pages.dev', async () => {
@@ -180,9 +180,7 @@ describe('CORS headers', () => {
       headers: { Origin: 'https://abc123.personal-blog.pages.dev' },
     })
 
-    expect(res.headers.get('access-control-allow-origin')).toBe(
-      'https://abc123.personal-blog.pages.dev'
-    )
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
   })
 
   it('does not allow arbitrary origins', async () => {

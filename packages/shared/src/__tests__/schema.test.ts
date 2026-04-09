@@ -83,7 +83,7 @@ describe('CreateEntrySchema', () => {
       country: 'Taiwan',
       visited_at: '2026-04-07',
       rating: 4,
-      revisit: true,
+      revisit: 1,
       book_title: 'Some Book',
       book_author: 'Author',
       mood: 'happy',

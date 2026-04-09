@@ -37,8 +37,8 @@ export const COMMAND_PRESETS: Record<string, CommandPreset> = {
   article: {
     entry_type: 'article',
     category: 'journal',
-    status: 'published',
-    visibility: 'public',
+    status: 'draft',
+    visibility: 'private',
     description: '文章：深入的觀察或評論',
   },
   travel: {
