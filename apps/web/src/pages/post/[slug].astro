@@ -2,212 +2,252 @@
 import BaseLayout from '../../layouts/BaseLayout.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
 import { formatDate } from '@personal-blog/shared'
-import { renderMarkdownToHtml } from '../../lib/markdown'
+import { renderMarkdownToHtml, stripFirstH1 } from '../../lib/markdown'
 import { getEntryBySlug, getAssetsByEntryId } from '../../lib/data'
 import { applyPageCacheHeaders } from '../../lib/response'
 
 const slug = Astro.params.slug
-
-// SSR: 每次請求時取最新資料
 const entry = slug ? await getEntryBySlug(decodeURIComponent(slug)) : null
 
 if (!entry) {
   return Astro.redirect('/stream')
 }
 
-const renderedContent = await renderMarkdownToHtml(entry.content_markdown)
-const displayTitle = entry.title?.trim() || formatDate(entry.created_at)
+// Strip the first H1 before rendering — it's shown separately as the page <title>
+// (but for posts, we don't show a duplicate h1 header)
+const cleanedMarkdown = stripFirstH1(entry.content_markdown || '')
+const renderedContent = await renderMarkdownToHtml(cleanedMarkdown)
 
-// Fetch assets (cover image, etc.)
+const displayTitle = entry.title?.replace(/^#+\s+/, '').trim() || formatDate(entry.created_at)
+
 const assets = await getAssetsByEntryId(entry.id)
-const coverAsset = assets.find((a: any) => a.kind === 'cover')
-const imageAssets = assets.filter((a: any) => a.kind === 'image')
 const API_BASE = (import.meta as any).env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
 
-// 應用快取策略：10分鐘 CDN 快取 + 1小時過期後仍可用
+// Build image list: cover first (if set), then extras
+const coverAsset = assets.find((a: any) => a.kind === 'cover')
+const imageAssets = assets.filter((a: any) => a.kind === 'image')
+const allImages: any[] = [
+  ...(coverAsset ? [coverAsset] : []),
+  ...imageAssets,
+]
+
+const visibleImages = allImages.slice(0, 4)
+const extraCount = allImages.length - visibleImages.length
+const imageCount = Math.min(allImages.length, 4)
+
 applyPageCacheHeaders(Astro.response, 'detail')
 ---
 
 <BaseLayout title={`${displayTitle} | Double River`}>
   <ReaderControls client:load />
   <article class="post">
-    <header class="post-header">
-      <div class="post-meta">
-        <time datetime={entry.created_at}>{formatDate(entry.created_at)}</time>
-        {entry.category && (
-          <span class="category">{entry.category}</span>
-        )}
-      </div>
-      <h1>{displayTitle}</h1>
-      {entry.excerpt && <p class="excerpt">{entry.excerpt}</p>}
-      {coverAsset && (
-        <img
-          class="cover-image"
-          src={`${API_BASE}/api/assets/${coverAsset.storage_key}`}
-          alt={coverAsset.alt_text || displayTitle}
-          width={coverAsset.width}
-          height={coverAsset.height}
-        />
-      )}
-    </header>
 
-    <div class="post-content">
-      <div class="markdown-content" set:html={renderedContent} />
-      {imageAssets.length > 0 && (
-        <div class="post-images">
-          {imageAssets.map((asset: any) => (
-            <img
-              src={`${API_BASE}/api/assets/${asset.storage_key}`}
-              alt={asset.alt_text || ''}
-              width={asset.width}
-              height={asset.height}
-              loading="lazy"
-            />
+    <!-- Top bar: date + category -->
+    <div class="post-meta">
+      <time datetime={entry.created_at}>{formatDate(entry.created_at)}</time>
+      {entry.category && (
+        <a href={`/c/${entry.category}`} class="category-tag">{entry.category}</a>
+      )}
+    </div>
+
+    <!-- Post body: content text + images -->
+    <div class="post-body">
+
+      <!-- Collapsible text content -->
+      <div class="post-text markdown-content" id="postText" set:html={renderedContent} />
+      <button class="see-more-btn" id="seeMoreBtn" hidden>繼續閱讀</button>
+
+      <!-- Image gallery (FB-style) -->
+      {allImages.length > 0 && (
+        <div class="image-gallery" data-count={imageCount}>
+          {visibleImages.map((asset: any, i: number) => (
+            <button
+              class="gallery-item"
+              data-src={`${API_BASE}/api/assets/${asset.storage_key}`}
+              data-alt={asset.alt_text || displayTitle}
+              aria-label={`查看圖片 ${i + 1}`}
+            >
+              <img
+                src={`${API_BASE}/api/assets/${asset.storage_key}`}
+                alt={asset.alt_text || ''}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                width={asset.width || undefined}
+                height={asset.height || undefined}
+              />
+              {i === 3 && extraCount > 0 && (
+                <span class="gallery-more" aria-hidden="true">+{extraCount}</span>
+              )}
+            </button>
           ))}
         </div>
       )}
     </div>
 
+    <!-- Footer nav -->
     <footer class="post-footer">
-      <nav class="post-nav">
-        <a href="/stream" class="btn-back">← 返回動態</a>
-        {entry.category && (
-          <a href={`/c/${entry.category}`} class="btn-category">
-            查看此分類
-          </a>
-        )}
-      </nav>
+      <a href="/stream" class="btn-back">← 返回動態</a>
+      {entry.category && (
+        <a href={`/c/${entry.category}`} class="btn-category">#{entry.category}</a>
+      )}
     </footer>
   </article>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" hidden>
+    <div class="lightbox-overlay" id="lightboxOverlay"></div>
+    <button class="lightbox-close" id="lightboxClose" aria-label="關閉">✕</button>
+    <img class="lightbox-img" id="lightboxImg" src="" alt="" />
+  </div>
 </BaseLayout>
 
 <style>
   article.post {
-    max-width: 720px;
+    max-width: 680px;
     margin: 0 auto;
-    padding: 1.5rem 0;
+    padding: 1.25rem 0 2rem;
   }
 
-  .post-header {
-    margin-bottom: 2.5rem;
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid #e8e2d9;
-  }
-
+  /* ── Meta bar ── */
   .post-meta {
     display: flex;
-    gap: 1rem;
-    font-size: 0.9rem;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
     color: #999;
-    margin-bottom: 0.75rem;
   }
 
-  .category {
+  .category-tag {
     color: #0066cc;
+    text-decoration: none;
+    font-size: 0.82rem;
   }
 
-  .post-header h1 {
-    font-size: 1.75rem;
-    line-height: 1.4;
-    font-weight: 700;
-    margin-bottom: 0.75rem;
+  .category-tag:hover {
+    text-decoration: underline;
   }
 
-  .excerpt {
-    font-size: 1rem;
-    color: #666;
-    line-height: 1.7;
+  /* ── Body ── */
+  .post-body {
+    background: #fff;
+    border: 1px solid #ece7df;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
   }
 
-  .cover-image {
+  /* ── Text content ── */
+  .post-text {
+    padding: 1.25rem 1.25rem 1rem;
+    font-size: 1em; /* inherits from article so ReaderControls works */
+    line-height: 1.85;
+    color: #333;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .post-text.is-collapsible {
+    max-height: 380px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .post-text.is-collapsible::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 72px;
+    background: linear-gradient(to bottom, transparent, #fff);
+    pointer-events: none;
+  }
+
+  .see-more-btn {
+    display: block;
     width: 100%;
-    height: auto;
-    border-radius: 6px;
-    margin-top: 1.5rem;
+    padding: 0.6rem;
+    border: none;
+    border-top: 1px solid #f0ece4;
+    background: #faf8f5;
+    color: #0066cc;
+    font-size: 0.88rem;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s;
   }
 
-  .post-images {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    margin: 2rem 0;
+  .see-more-btn:hover {
+    background: #f0ece4;
   }
 
-  .post-images img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 4px;
-  }
-
-  .post-content {
-    font-size: 1.05rem;
-    line-height: 2;
-    color: #333;
-    margin: 2rem 0;
-  }
-
-  .markdown-content {
-    font-size: 1.05rem;
-    line-height: 2;
-    color: #333;
-  }
-
+  /* ── Markdown typography ── */
   .markdown-content p {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1em;
+  }
+
+  .markdown-content p:last-child {
+    margin-bottom: 0;
   }
 
   .markdown-content h1,
   .markdown-content h2,
   .markdown-content h3,
-  .markdown-content h4,
-  .markdown-content h5,
-  .markdown-content h6 {
-    margin-top: 2rem;
-    margin-bottom: 1rem;
+  .markdown-content h4 {
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
     font-weight: 600;
     line-height: 1.4;
+    color: #1a1a1a;
   }
 
-  .markdown-content h1 { font-size: 1.5rem; }
-  .markdown-content h2 { font-size: 1.35rem; }
-  .markdown-content h3 { font-size: 1.2rem; }
+  .markdown-content h1 { font-size: 1.4em; }
+  .markdown-content h2 { font-size: 1.25em; }
+  .markdown-content h3 { font-size: 1.1em; }
 
   .markdown-content ul,
   .markdown-content ol {
-    margin: 1rem 0 1.5rem 1.5rem;
+    margin: 0.75em 0;
+    padding-left: 1.5em;
   }
 
   .markdown-content li {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.3em;
+    line-height: 1.7;
+  }
+
+  .markdown-content li > p {
+    margin-bottom: 0.3em;
+  }
+
+  .markdown-content blockquote {
+    border-left: 3px solid #ddd;
+    padding-left: 1rem;
+    margin: 1em 0;
+    color: #666;
   }
 
   .markdown-content code {
     background: #f4f4f4;
-    padding: 0.15rem 0.4rem;
+    padding: 0.1em 0.35em;
     border-radius: 3px;
     font-family: 'Courier New', monospace;
-    font-size: 0.9em;
+    font-size: 0.88em;
   }
 
   .markdown-content pre {
     background: #f8f8f8;
-    border-left: 3px solid #ddd;
-    padding: 1rem 1.25rem;
+    border-left: 3px solid #e0dbd3;
+    padding: 0.85rem 1rem;
     border-radius: 4px;
     overflow-x: auto;
-    margin: 1.5rem 0;
+    margin: 1em 0;
   }
 
   .markdown-content pre code {
     background: none;
     padding: 0;
-  }
-
-  .markdown-content blockquote {
-    border-left: 3px solid #ddd;
-    padding-left: 1.25rem;
-    margin: 1.5rem 0;
-    color: #666;
+    font-size: 0.9em;
   }
 
   .markdown-content a {
@@ -215,78 +255,240 @@ applyPageCacheHeaders(Astro.response, 'detail')
     text-decoration: underline;
     text-decoration-style: dotted;
     text-underline-offset: 2px;
-  }
-
-  .markdown-content a:hover {
-    text-decoration-style: solid;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   .markdown-content img {
     max-width: 100%;
     height: auto;
     border-radius: 4px;
-    margin: 1.5rem 0;
   }
 
   .markdown-content hr {
     border: none;
     border-top: 1px solid #e8e2d9;
-    margin: 2rem 0;
+    margin: 1.5em 0;
   }
 
-  .post-footer {
-    margin-top: 3rem;
-    padding-top: 2rem;
-    border-top: 1px solid #e8e2d9;
+  /* ── Image Gallery (FB-style) ── */
+  .image-gallery {
+    display: grid;
+    gap: 3px;
+    background: #000;
+    /* max-height so portrait images don't go crazy tall */
   }
 
-  .post-nav {
+  /* 1 image: full width */
+  .image-gallery[data-count="1"] {
+    grid-template-columns: 1fr;
+  }
+  .image-gallery[data-count="1"] .gallery-item {
+    aspect-ratio: 16 / 9;
+  }
+
+  /* 2 images: side by side */
+  .image-gallery[data-count="2"] {
+    grid-template-columns: 1fr 1fr;
+  }
+  .image-gallery[data-count="2"] .gallery-item {
+    aspect-ratio: 1 / 1;
+  }
+
+  /* 3 images: large left + 2 stacked right */
+  .image-gallery[data-count="3"] {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .image-gallery[data-count="3"] .gallery-item:first-child {
+    grid-row: span 2;
+    aspect-ratio: auto;
+  }
+  .image-gallery[data-count="3"] .gallery-item:not(:first-child) {
+    aspect-ratio: 16 / 9;
+  }
+
+  /* 4 images: 2x2 */
+  .image-gallery[data-count="4"] {
+    grid-template-columns: 1fr 1fr;
+  }
+  .image-gallery[data-count="4"] .gallery-item {
+    aspect-ratio: 1 / 1;
+  }
+
+  .gallery-item {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+    background: #111;
+    display: block;
+    width: 100%;
+  }
+
+  .gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity 0.2s;
+  }
+
+  .gallery-item:hover img {
+    opacity: 0.92;
+  }
+
+  .gallery-more {
+    position: absolute;
+    inset: 0;
     display: flex;
-    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 1.75rem;
+    font-weight: 700;
+    pointer-events: none;
+  }
+
+  /* ── Lightbox ── */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .lightbox[hidden] { display: none; }
+
+  .lightbox-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+    cursor: pointer;
+  }
+
+  .lightbox-img {
+    max-width: 92vw;
+    max-height: 88vh;
+    object-fit: contain;
+    position: relative;
+    z-index: 1;
+    border-radius: 4px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+
+  .lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #fff;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.28);
+  }
+
+  /* ── Footer ── */
+  .post-footer {
+    display: flex;
+    gap: 0.75rem;
     flex-wrap: wrap;
   }
 
   .btn-back,
   .btn-category {
     display: inline-block;
-    padding: 0.6rem 1.25rem;
+    padding: 0.5rem 1rem;
     border-radius: 6px;
     text-decoration: none;
-    font-size: 0.9rem;
-    transition: all 0.2s ease;
+    font-size: 0.88rem;
+    transition: all 0.15s;
   }
 
   .btn-back {
     background: #f0f0f0;
-    color: #333;
+    color: #444;
   }
 
-  .btn-back:hover {
-    background: #e0e0e0;
-  }
+  .btn-back:hover { background: #e0e0e0; }
 
   .btn-category {
-    background: #0066cc;
-    color: white;
+    color: #0066cc;
+    background: #eef5ff;
   }
 
-  .btn-category:hover {
-    background: #0052a3;
-  }
+  .btn-category:hover { background: #deeaff; }
 
+  /* ── Mobile ── */
   @media (max-width: 640px) {
-    .post-header h1 {
-      font-size: 1.5rem;
+    article.post {
+      padding: 0.75rem 0 1.5rem;
     }
 
-    .post-nav {
-      flex-direction: column;
-    }
-
-    .btn-back,
-    .btn-category {
-      width: 100%;
-      text-align: center;
+    .post-text {
+      padding: 1rem 1rem 0.75rem;
     }
   }
 </style>
+
+<script>
+  // ── See More ──────────────────────────────────────────────────────────────
+  const postText = document.getElementById('postText');
+  const seeMoreBtn = document.getElementById('seeMoreBtn');
+  const COLLAPSE_HEIGHT = 380;
+
+  if (postText && seeMoreBtn && postText.scrollHeight > COLLAPSE_HEIGHT + 40) {
+    postText.classList.add('is-collapsible');
+    seeMoreBtn.hidden = false;
+    seeMoreBtn.addEventListener('click', () => {
+      postText.classList.remove('is-collapsible');
+      seeMoreBtn.remove();
+    });
+  }
+
+  // ── Lightbox ──────────────────────────────────────────────────────────────
+  const lightbox = document.getElementById('lightbox') as HTMLElement | null;
+  const lightboxImg = document.getElementById('lightboxImg') as HTMLImageElement | null;
+  const lightboxOverlay = document.getElementById('lightboxOverlay');
+  const lightboxClose = document.getElementById('lightboxClose');
+
+  document.querySelectorAll<HTMLButtonElement>('.gallery-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const src = item.dataset.src;
+      const alt = item.dataset.alt || '';
+      if (lightbox && lightboxImg && src) {
+        lightboxImg.src = src;
+        lightboxImg.alt = alt;
+        lightbox.removeAttribute('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+    });
+  });
+
+  function closeLightbox() {
+    lightbox?.setAttribute('hidden', '');
+    document.body.style.overflow = '';
+  }
+
+  lightboxOverlay?.addEventListener('click', closeLightbox);
+  lightboxClose?.addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLightbox();
+  });
+</script>

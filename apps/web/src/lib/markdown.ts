@@ -110,6 +110,39 @@ export function extractPlainText(markdown: string, maxLength?: number): string {
 }
 
 /**
+ * Extract the first H1 heading text from markdown content
+ */
+export function extractH1Title(markdown: string): string | null {
+  if (!markdown) return null;
+  const lines = markdown.split('\n');
+  for (const line of lines.slice(0, 10)) {
+    const m = line.match(/^#\s+(.+)$/);
+    if (m) return m[1].trim();
+    if (line.trim()) break; // stop at first non-empty non-H1 line
+  }
+  return null;
+}
+
+/**
+ * Remove the first H1 line (and any immediately following blank lines) from markdown.
+ * Used so the rendered HTML doesn't duplicate the <h1> shown in the page header.
+ */
+export function stripFirstH1(markdown: string): string {
+  if (!markdown) return '';
+  const lines = markdown.split('\n');
+  // Skip leading blank lines
+  let start = 0;
+  while (start < lines.length && !lines[start].trim()) start++;
+  // If the first content line is an H1, strip it + following blank lines
+  if (start < lines.length && /^#\s/.test(lines[start])) {
+    let end = start + 1;
+    while (end < lines.length && !lines[end].trim()) end++;
+    return lines.slice(end).join('\n');
+  }
+  return markdown;
+}
+
+/**
  * Strip leading markdown title from content
  * Removes the first # title line if it matches the provided title
  */

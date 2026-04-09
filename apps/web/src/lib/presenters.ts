@@ -5,6 +5,8 @@ import {
   extractPlainText,
   stripLeadingMarkdownTitle,
   getFirstMeaningfulParagraph,
+  extractH1Title,
+  stripFirstH1,
 } from './markdown';
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -68,17 +70,30 @@ function buildHref(entry: Entry): string {
 }
 
 function buildTitle(entry: Entry): string {
-  return entry.title?.trim() || formatDate(entry.created_at);
+  if (entry.title?.trim()) {
+    // Strip any accidental "# " markdown heading prefix stored in the DB
+    return entry.title.replace(/^#+\s+/, '').trim() || formatDate(entry.created_at);
+  }
+  // Fall back to first H1 extracted from content
+  const h1 = extractH1Title(entry.content_markdown || '');
+  if (h1) return h1;
+  return formatDate(entry.created_at);
 }
 
 function buildExcerpt(entry: Entry, maxLength = 120): string {
-  const explicitExcerpt = entry.excerpt?.trim();
-  if (explicitExcerpt) return explicitExcerpt;
+  const title = buildTitle(entry);
 
-  return getFirstMeaningfulParagraph(
-    stripLeadingMarkdownTitle(entry.content_markdown, entry.title?.trim() || undefined),
-    maxLength
-  );
+  // Use an explicit excerpt only when it's genuinely different from the title
+  const explicitExcerpt = entry.excerpt?.trim();
+  if (explicitExcerpt && explicitExcerpt !== title) {
+    return explicitExcerpt.length > maxLength
+      ? explicitExcerpt.slice(0, maxLength).trim() + '...'
+      : explicitExcerpt;
+  }
+
+  // Strip the first H1 from content (same as the title), then get first paragraph
+  const stripped = stripFirstH1(entry.content_markdown || '');
+  return getFirstMeaningfulParagraph(stripped, maxLength);
 }
 
 function buildCover(

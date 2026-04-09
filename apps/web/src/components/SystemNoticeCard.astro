@@ -8,7 +8,14 @@ const { message, href } = Astro.props as Props
 ---
 
 <a class="system-notice" href={href}>
-  <span class="notice-icon">📢</span>
+  <span class="notice-icon" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+    </svg>
+  </span>
   <span class="notice-text">{message}</span>
 </a>
 
@@ -16,27 +23,35 @@ const { message, href } = Astro.props as Props
   .system-notice {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.7rem 1rem;
-    border-radius: 10px;
-    background: #f8f6f2;
-    border: 1px solid #ece7df;
+    gap: 0.55rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid #e8e3db;
     text-decoration: none;
-    color: #555;
-    font-size: 0.9rem;
-    transition: background 0.15s, border-color 0.15s;
+    color: #888;
+    font-size: 0.85rem;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    overflow: hidden;
   }
 
   .system-notice:hover {
-    background: #f0ece4;
-    border-color: #ddd5ca;
+    background: #f5f1eb;
+    border-color: #d5cfc6;
+    color: #555;
   }
 
   .notice-icon {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    opacity: 0.6;
   }
 
   .notice-text {
-    line-height: 1.5;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>
