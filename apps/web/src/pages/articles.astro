@@ -1,73 +1,273 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
-import EntryCard from '../components/EntryCard.astro'
-import { getArticles } from '../lib/data'
-import { buildEntryCardModels } from '../lib/presenters'
+import { getArticles, getProfile } from '../lib/data'
+import { buildEntryCardModels, CATEGORY_LABELS } from '../lib/presenters'
 import { applyPageCacheHeaders } from '../lib/response'
 
-const articles = await getArticles()
+const [articles, profile] = await Promise.all([
+  getArticles(),
+  getProfile(),
+])
+
 const articleModels = await buildEntryCardModels(articles, { excerptLength: 150 })
+const latestArticles = articleModels.slice(0, 7)
+const categoryCounts = articles.reduce<Record<string, number>>((acc, article) => {
+  acc[article.category] = (acc[article.category] || 0) + 1
+  return acc
+}, {})
 
 applyPageCacheHeaders(Astro.response, 'articles')
 ---
 
 <BaseLayout title="文章 | Double River" description="整理過、值得回頭找的長文與評論。">
-  <div class="articles-container">
+  <div class="articles-shell">
     <header class="articles-header">
+      <p class="articles-kicker">category index</p>
       <h1>文章</h1>
-      <p class="articles-desc">整理過的評論、旅記、讀書心得、長篇日記</p>
+      <p class="articles-desc">整理過、值得回頭翻找的長文、心得與評論。</p>
     </header>
 
-    <div class="articles-list">
-      {
-        articleModels.length > 0 ? (
+    <div class="articles-layout">
+      <section class="articles-main" aria-label="文章清單">
+        {articleModels.length > 0 ? (
           articleModels.map((vm) => (
-            <EntryCard
-              href={vm.href}
-              title={vm.displayTitle}
-              excerpt={vm.displayExcerpt}
-              date={vm.displayDate}
-              categoryLabel={vm.categoryLabel}
-              coverUrl={vm.coverUrl}
-              coverAlt={vm.coverAlt}
-              stats={vm.metrics}
-              variant="list"
-            />
+            <article class="article-index-item">
+              <a href={vm.href} class="article-index-link">
+                <div class="article-index-meta">
+                  <time datetime={vm.rawDate}>{vm.displayDate}</time>
+                  <span class="article-index-category">{vm.categoryLabel}</span>
+                </div>
+                <h2>{vm.displayTitle}</h2>
+                <p class="article-index-excerpt">{vm.displayExcerpt}</p>
+              </a>
+
+              <div class="article-index-footer">
+                <span>留言 {vm.metrics.comment_count}</span>
+                <span>拍手 {vm.metrics.clap_count}</span>
+                <span>閱讀 {vm.metrics.view_count}</span>
+              </div>
+            </article>
           ))
         ) : (
           <p class="empty-state">還沒有任何文章</p>
-        )
-      }
+        )}
+      </section>
+
+      <aside class="articles-sidebar" aria-label="文章側欄">
+        <section class="sidebar-card profile-card">
+          <p class="sidebar-eyebrow">about</p>
+          <h2>{profile.name}</h2>
+          <p>{profile.bio || '把讀過、想過、走過的事整理成可回頭翻找的文字。'}</p>
+        </section>
+
+        <section class="sidebar-card">
+          <div class="sidebar-title">最新文章</div>
+          <ul class="sidebar-list">
+            {latestArticles.map((article) => (
+              <li>
+                <a href={article.href}>{article.displayTitle}</a>
+                <time datetime={article.rawDate}>{article.displayDate}</time>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section class="sidebar-card">
+          <div class="sidebar-title">文章類別</div>
+          <ul class="sidebar-category-list">
+            {Object.entries(categoryCounts).map(([category, count]) => (
+              <li>
+                <a href={`/c/${category}`}>
+                  <span>{CATEGORY_LABELS[category] || category}</span>
+                  <span>{count}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </aside>
     </div>
   </div>
 </BaseLayout>
 
 <style>
-  .articles-container {
-    max-width: 720px;
+  .articles-shell {
+    max-width: 1180px;
     margin: 0 auto;
-    padding: 2rem 1.5rem;
+    padding: 2rem 1.5rem 3rem;
   }
 
   .articles-header {
-    margin-bottom: 2.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #ddd8f1;
+  }
+
+  .articles-kicker {
+    margin: 0 0 0.45rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #8f89b2;
   }
 
   .articles-header h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 0.4rem;
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    margin-bottom: 0.5rem;
   }
 
   .articles-desc {
-    color: #888;
+    max-width: 46rem;
+    color: #726d89;
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+
+  .articles-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 3rem;
+    align-items: start;
+  }
+
+  .articles-main {
+    min-width: 0;
+  }
+
+  .article-index-item {
+    padding: 1.2rem 0 1.3rem;
+    border-bottom: 1px solid #e2ddee;
+  }
+
+  .article-index-link {
+    display: block;
+  }
+
+  .article-index-meta {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.55rem;
+    color: #908ba8;
     font-size: 0.95rem;
   }
 
-  .articles-list {
+  .article-index-category {
+    color: #4e6fcc;
+    font-weight: 600;
+  }
+
+  .article-index-item h2 {
+    margin: 0 0 0.65rem;
+    font-size: 1.15rem;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    color: #24253d;
+  }
+
+  .article-index-link:hover h2 {
+    color: #4b6fc8;
+  }
+
+  .article-index-excerpt {
+    max-width: 54rem;
+    margin: 0;
+    color: #66627b;
+    font-size: 1rem;
+    line-height: 1.8;
+  }
+
+  .article-index-footer {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.9rem;
+    color: #9a94af;
+    font-size: 0.9rem;
+  }
+
+  .articles-sidebar {
+    position: sticky;
+    top: 6rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+
+  .sidebar-card {
+    padding: 1rem 1.05rem;
+    border: 1px solid #dddaf0;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 10px 28px rgba(94, 95, 150, 0.06);
+  }
+
+  .sidebar-eyebrow {
+    margin: 0 0 0.4rem;
+    color: #8f89b2;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.72rem;
+  }
+
+  .profile-card h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.25rem;
+  }
+
+  .profile-card p {
+    margin: 0;
+    color: #696481;
+    line-height: 1.7;
+    font-size: 0.95rem;
+  }
+
+  .sidebar-title {
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #5e5b79;
+    letter-spacing: 0.08em;
+  }
+
+  .sidebar-list,
+  .sidebar-category-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .sidebar-list li + li,
+  .sidebar-category-list li + li {
+    margin-top: 0.7rem;
+  }
+
+  .sidebar-list a {
+    display: block;
+    color: #2b2d43;
+    line-height: 1.45;
+  }
+
+  .sidebar-list time {
+    display: block;
+    margin-top: 0.2rem;
+    color: #9892ae;
+    font-size: 0.82rem;
+  }
+
+  .sidebar-category-list a {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    color: #4b4a60;
+  }
+
+  .sidebar-category-list a:hover,
+  .sidebar-list a:hover {
+    color: #4b6fc8;
   }
 
   .empty-state {
@@ -76,13 +276,34 @@ applyPageCacheHeaders(Astro.response, 'articles')
     padding: 3rem;
   }
 
+  @media (max-width: 900px) {
+    .articles-layout {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .articles-sidebar {
+      position: static;
+    }
+  }
+
   @media (max-width: 640px) {
-    .articles-container {
+    .articles-shell {
       padding: 1.25rem 1rem;
     }
 
-    .articles-header h1 {
-      font-size: 1.3rem;
+    .article-index-item {
+      padding: 1rem 0 1.05rem;
+    }
+
+    .article-index-item h2 {
+      font-size: 1.5rem;
+      line-height: 1.2;
+    }
+
+    .article-index-excerpt {
+      font-size: 0.95rem;
+      line-height: 1.75;
     }
   }
 </style>

@@ -6,8 +6,12 @@ import { handleCreateModal, handleEditModal } from './handlers/modal';
 import { sendListFollowup } from './handlers/list';
 import { handleComponent } from './handlers/component';
 import { getEntryBySlug, createAsset } from '@personal-blog/shared/db';
-import { generateId } from '@personal-blog/shared';
 import { processAttachments } from './attachments';
+
+interface UserProfilePreviewRow {
+  name?: string | null;
+  bio?: string | null;
+}
 
 export async function handleDiscordInteraction(c: Context) {
   // ── Verify signature ─────────────────────────────────────────────────────
@@ -126,6 +130,97 @@ export async function handleDiscordInteraction(c: Context) {
       }
     }
 
+    // /個人資料 — open profile update modal
+    if (commandKey === 'profile') {
+      // Fetch current values to pre-fill
+      let currentName = 'life';
+      let currentBio = '';
+      try {
+        const row = (await db
+          .prepare('SELECT name, bio FROM user_profile WHERE id = 1')
+          .first()) as UserProfilePreviewRow | null;
+        if (row) { currentName = row.name || 'life'; currentBio = row.bio || ''; }
+      } catch {
+        currentName = 'life';
+        currentBio = '';
+      }
+
+      return c.json({
+        type: 9, // MODAL
+        data: {
+          custom_id: 'profile_modal',
+          title: '編輯個人資料',
+          components: [
+            {
+              type: 1,
+              components: [{
+                type: 4, custom_id: 'name', label: '名稱',
+                style: 1, required: true, max_length: 50,
+                placeholder: currentName,
+              }],
+            },
+            {
+              type: 1,
+              components: [{
+                type: 4, custom_id: 'bio', label: '簡介',
+                style: 2, required: false, max_length: 300,
+                placeholder: currentBio || '寫幾句自我介紹…',
+              }],
+            },
+            {
+              type: 1,
+              components: [{
+                type: 4, custom_id: 'links', label: '連結（JSON，選填）',
+                style: 2, required: false, max_length: 500,
+                placeholder: '[{"label":"GitHub","url":"https://github.com/yourname"}]',
+              }],
+            },
+          ],
+        },
+      });
+    }
+
+    // /設定頭貼 or /設定橫條 — upload profile image to R2
+    if (commandKey === 'profile_avatar' || commandKey === 'profile_banner') {
+      const imageOpt = payload.data?.options?.find((o: any) => o.name === 'image');
+      const imageId = imageOpt?.value;
+      const attachment = imageId ? payload.data?.resolved?.attachments?.[imageId] : null;
+
+      if (!attachment) {
+        return c.json({ type: 4, data: { content: '❌ 請附上圖片', flags: 64 } });
+      }
+
+      const bucket = (c.env as any)?.ASSETS_BUCKET;
+      if (!bucket) {
+        return c.json({ type: 4, data: { content: '❌ R2 bucket 未設定', flags: 64 } });
+      }
+
+      try {
+        const response = await fetch(attachment.url);
+        if (!response.ok) throw new Error('Download failed');
+        const bytes = await response.arrayBuffer();
+
+        const contentType = attachment.content_type || 'image/jpeg';
+        const ext = contentType.includes('png') ? '.png' : contentType.includes('webp') ? '.webp' : '.jpg';
+        const field = commandKey === 'profile_avatar' ? 'avatar' : 'banner';
+        const storageKey = `profile/${field}${ext}`;
+
+        await bucket.put(storageKey, bytes, { httpMetadata: { contentType } });
+
+        const col = field === 'avatar' ? 'avatar_key' : 'banner_key';
+        await db.prepare(
+          `INSERT INTO user_profile (id, ${col}, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP)
+           ON CONFLICT(id) DO UPDATE SET ${col} = excluded.${col}, updated_at = CURRENT_TIMESTAMP`
+        ).bind(storageKey).run();
+
+        const label = field === 'avatar' ? '頭貼' : '橫條';
+        return c.json({ type: 4, data: { content: `✅ ${label}已更新`, flags: 64 } });
+      } catch (err) {
+        console.error('Profile image upload error:', err);
+        return c.json({ type: 4, data: { content: '❌ 圖片上傳失敗，請稍後再試', flags: 64 } });
+      }
+    }
+
     // /貼文 /文章 /旅記 /書摘 — open create modal
     const preset = getCommandPreset(commandKey);
     if (preset) {
@@ -156,6 +251,31 @@ export async function handleDiscordInteraction(c: Context) {
     if (customId.startsWith('edit_modal:')) {
       const entryId = customId.slice('edit_modal:'.length);
       return c.json(await handleEditModal(db, entryId, components));
+    }
+
+    if (customId === 'profile_modal') {
+      const get = (id: string) =>
+        components.flatMap((r: any) => r.components).find((c: any) => c.custom_id === id)?.value || '';
+
+      const name = get('name').trim() || 'life';
+      const bio = get('bio').trim();
+      const linksRaw = get('links').trim();
+      let links: any[] = [];
+      if (linksRaw) {
+        try { links = JSON.parse(linksRaw); } catch {
+          return c.json({ type: 4, data: { content: '❌ 連結格式不正確，請使用 JSON 陣列', flags: 64 } });
+        }
+      }
+
+      await db.prepare(
+        `INSERT INTO user_profile (id, name, bio, links_json, updated_at)
+         VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name, bio = excluded.bio,
+           links_json = excluded.links_json, updated_at = CURRENT_TIMESTAMP`
+      ).bind(name, bio, JSON.stringify(links)).run();
+
+      return c.json({ type: 4, data: { content: `✅ 個人資料已更新`, flags: 64 } });
     }
 
     return c.json({ type: 4, data: { content: '❌ 未知的表單提交', flags: 64 } });

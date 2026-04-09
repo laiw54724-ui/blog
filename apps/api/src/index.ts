@@ -4,8 +4,22 @@ import { cors } from 'hono/cors';
 import { handleDiscordInteraction } from './discord/interactions';
 import entriesRouter from './routes/entries';
 import commentsRouter from './routes/comments';
+import profileRouter from './routes/profile';
 
-const app = new Hono();
+interface StoredObject {
+  body: BodyInit | null;
+  httpMetadata?: {
+    contentType?: string;
+  };
+}
+
+interface AppEnv {
+  ASSETS_BUCKET?: {
+    get(key: string): Promise<StoredObject | null>;
+  };
+}
+
+const app = new Hono<{ Bindings: AppEnv }>();
 
 // CORS 設定 - Discord 不會發送 Origin header，但其他客戶端需要 CORS
 // Discord interactions 使用簽名驗證，不依賴 CORS
@@ -23,10 +37,11 @@ app.post('/api/discord/interactions', handleDiscordInteraction);
 // API routes
 app.route('/api/entries', entriesRouter);
 app.route('/api/entries/:id/comments', commentsRouter);
+app.route('/api/profile', profileRouter);
 
 // Serve assets from R2
-app.get('/api/assets/*', async (c: Context) => {
-  const bucket = (c.env as any)?.ASSETS_BUCKET;
+app.get('/api/assets/*', async (c: Context<{ Bindings: AppEnv }>) => {
+  const bucket = c.env?.ASSETS_BUCKET;
   if (!bucket) {
     return c.json({ error: 'Storage not configured' }, 500);
   }

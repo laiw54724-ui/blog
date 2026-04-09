@@ -28,12 +28,14 @@ export function renderCommentMarkdownSafe(input: string): string {
  */
 
 import { unified } from 'unified';
+import { visit } from 'unist-util-visit';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeRaw from 'rehype-raw';
 import rehypeStringify from 'rehype-stringify';
 
 // Configure the unified processor
@@ -41,9 +43,13 @@ const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(remarkMath)
-  .use(remarkRehype, { allowDangerousHtml: false })
+  .use(remarkRehype, { allowDangerousHtml: true })
+  .use(rehypeRaw)
+  .use(rehypeHeadingAnchors)
+  .use(rehypeCallouts)
+  .use(rehypeFigureImages)
   .use(rehypeKatex)
-  .use(rehypeHighlight)
+  .use(rehypeHighlight, { detect: true, ignoreMissing: true })
   .use(rehypeStringify);
 
 /**
@@ -56,13 +62,13 @@ export async function renderMarkdownToHtml(markdown: string): Promise<string> {
   }
 
   try {
-    // Remove quotes if the markdown was double-encoded
     let content = markdown;
     if (content.startsWith('"') && content.endsWith('"')) {
       content = content.slice(1, -1);
     }
 
-    // Use unified processor to render
+    content = normalizeMarkdownInput(content);
+
     const file = await processor.process(content);
     return String(file);
   } catch (error) {
@@ -83,6 +89,174 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function normalizeMarkdownInput(markdown: string): string {
+  let content = markdown
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\t/g, '    ');
+
+  // Decode literal escaped newlines if the whole payload was stringified once upstream.
+  if (!content.includes('\n') && content.includes('\\n')) {
+    content = content.replace(/\\n/g, '\n');
+  }
+
+  content = promoteStandaloneMath(content);
+
+  return content.trim();
+}
+
+function promoteStandaloneMath(markdown: string): string {
+  return markdown
+    .split('\n')
+    .map((line) => {
+      const match = line.match(/^(\s*>?\s*)\$(.+)\$\s*$/);
+      if (!match) return line;
+
+      const [, prefix, expression] = match;
+      const trimmed = expression.trim();
+
+      if (!trimmed || trimmed.includes('$')) return line;
+
+      return `${prefix}$$${trimmed}$$`;
+    })
+    .join('\n');
+}
+
+type HastNode = {
+  type?: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+};
+
+function rehypeHeadingAnchors() {
+  return (tree: HastNode) => {
+    const usedIds = new Set<string>();
+
+    visit(tree as any, 'element', (node: HastNode) => {
+      if (!node.tagName || !/^h[1-6]$/.test(node.tagName)) return;
+      if (!node.children?.length) return;
+
+      const slugBase = slugifyHeading(extractNodeText(node));
+      if (!slugBase) return;
+
+      const slug = uniqueSlug(slugBase, usedIds);
+      node.properties = { ...(node.properties ?? {}), id: slug };
+      node.children.push({
+        type: 'element',
+        tagName: 'a',
+        properties: {
+          href: `#${slug}`,
+          className: ['heading-anchor'],
+          ariaHidden: 'true',
+          tabIndex: -1,
+        },
+        children: [{ type: 'text', value: '#' }],
+      });
+    });
+  };
+}
+
+function rehypeCallouts() {
+  return (tree: HastNode) => {
+    visit(tree as any, 'element', (node: HastNode) => {
+      if (node.tagName !== 'blockquote' || !node.children?.length) return;
+
+      const firstChild = node.children[0];
+      if (firstChild?.tagName !== 'p' || !firstChild.children?.length) return;
+
+      const firstTextNode = firstChild.children.find((child) => child.type === 'text' && typeof child.value === 'string');
+      const rawText = firstTextNode?.value ?? '';
+      const match = rawText.match(/^\[!(NOTE|TIP|INFO|WARN|WARNING|CAUTION)\]\s*/i);
+      if (!match) return;
+
+      const kind = match[1].toLowerCase() === 'warning' ? 'warn' : match[1].toLowerCase();
+      const label = kind === 'warn' ? 'Warning' : kind.charAt(0).toUpperCase() + kind.slice(1);
+
+      firstTextNode!.value = rawText.replace(match[0], '');
+      if (!firstTextNode!.value?.trim()) {
+        firstChild.children = firstChild.children.filter((child) => child !== firstTextNode);
+      }
+
+      node.properties = {
+        ...(node.properties ?? {}),
+        className: ['callout', `callout-${kind}`],
+      };
+
+      node.children.unshift({
+        type: 'element',
+        tagName: 'div',
+        properties: { className: ['callout-title'] },
+        children: [{ type: 'text', value: label }],
+      });
+    });
+  };
+}
+
+function rehypeFigureImages() {
+  return (tree: HastNode) => {
+    visit(tree as any, 'element', (node: HastNode, index: number | undefined, parent: HastNode | undefined) => {
+      if (!parent || node.tagName !== 'p' || !node.children?.length || typeof index !== 'number') return;
+      if (node.children.length !== 1) return;
+      if (!parent.children) return;
+
+      const image = node.children[0];
+      if (image?.tagName !== 'img') return;
+
+      const alt = typeof image.properties?.alt === 'string' ? image.properties.alt.trim() : '';
+      if (!alt) return;
+
+      parent.children = [
+        ...parent.children.slice(0, index),
+        {
+          type: 'element',
+          tagName: 'figure',
+          properties: { className: ['md-figure'] },
+          children: [
+            image,
+            {
+              type: 'element',
+              tagName: 'figcaption',
+              properties: { className: ['md-figcaption'] },
+              children: [{ type: 'text', value: alt }],
+            },
+          ],
+        },
+        ...parent.children.slice(index + 1),
+      ];
+    });
+  };
+}
+
+function extractNodeText(node: HastNode): string {
+  if (node.type === 'text') return node.value ?? '';
+  if (!node.children?.length) return '';
+  return node.children.map((child) => extractNodeText(child)).join(' ');
+}
+
+function slugifyHeading(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/<[^>]+>/g, '')
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function uniqueSlug(base: string, used: Set<string>): string {
+  let slug = base;
+  let index = 2;
+  while (used.has(slug)) {
+    slug = `${base}-${index}`;
+    index += 1;
+  }
+  used.add(slug);
+  return slug;
 }
 
 /**
@@ -219,7 +393,7 @@ export function getFirstMeaningfulParagraph(content: string, maxLength?: number)
         continue;
       }
 
-      let normalized = line
+      const normalized = line
         .replace(/^\s*[-*+]\s+/, '')
         .replace(/^\s*\d+\.\s+/, '')
         .replace(/^\s*>\s?/, '')

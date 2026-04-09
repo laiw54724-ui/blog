@@ -1,31 +1,60 @@
 # 設置指南
 
-## 環境變數設置
+## 需求
 
-1. 複製 `.env.example` 為 `.env.local`
-2. 填入以下變數：
+- Node `22.12.0+`
+- npm `9+`
 
-### Discord 配置
+專案根目錄已提供：
 
-- `DISCORD_TOKEN`: Bot token (從 Discord Developer Portal 獲取)
-- `DISCORD_PUBLIC_KEY`: Public key
-- `DISCORD_CLIENT_ID`: Application ID
-- `DISCORD_GUILD_ID`: 測試 Guild ID (可選，用於開發)
+- [.nvmrc](/Users/wen/Documents/dev/blog/.nvmrc)
+- [.node-version](/Users/wen/Documents/dev/blog/.node-version)
 
-### Cloudflare 配置
+如果你用 `fnm`：
 
-- `CLOUDFLARE_API_TOKEN`: CF API token
-- `CLOUDFLARE_ACCOUNT_ID`: CF Account ID
+```bash
+eval "$(fnm env --shell zsh)"
+fnm use 22.12.0
+```
 
-## 初始化步驟
-
-### 1. 安裝依賴
+## 安裝依賴
 
 ```bash
 npm install
 ```
 
-### 2. 設置 D1 數據庫
+## 環境變數
+
+先複製：
+
+```bash
+cp .env.example .env.local
+```
+
+再依需求填入。
+
+### Discord
+
+- `DISCORD_TOKEN`
+- `DISCORD_PUBLIC_KEY`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_GUILD_ID`：本機開發可選
+
+### Cloudflare
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+### Web / API
+
+- `PUBLIC_API_URL`
+- `API_SECRET`
+
+實際 deploy 所需的 bindings 仍以各自的 `wrangler.toml` 為準。
+
+## 初始化步驟
+
+### 1. 建立 D1 database
 
 ```bash
 cd apps/api
@@ -33,131 +62,115 @@ wrangler d1 create personal-blog
 wrangler d1 execute personal-blog --file ../../db/schema.sql
 ```
 
-更新 `wrangler.toml` 中的 `database_id`。
-
-### 3. 註冊 Discord 指令
+如果有額外 migration，再依序執行：
 
 ```bash
-npm run register-commands -w apps/api
+wrangler d1 execute personal-blog --file ../../db/migrate-v2.sql
+wrangler d1 execute personal-blog --file ../../db/migrate-profile.sql
+wrangler d1 execute personal-blog --file ../../db/indices.sql
 ```
 
-### 4. 開發模式
+之後更新 [apps/api/wrangler.toml](/Users/wen/Documents/dev/blog/apps/api/wrangler.toml) 中的 `database_id` 與相關 bindings。
 
-終端 1 - 啟動 API:
+### 2. 註冊 Discord 指令
+
+```bash
+npm run register-commands --workspace=apps/api
+```
+
+## 本機開發
+
+### 啟動 API
 
 ```bash
 npm run dev:api
 ```
 
-終端 2 - 啟動網站:
+### 啟動網站
 
 ```bash
 npm run dev:web
 ```
 
-## Discord Webhook 設置
+### 或分開兩個終端一起跑
 
-1. 在 Discord Developer Portal 中配置 Interactions Endpoint URL
-2. 指向你的 Worker URL: `https://your-api-domain.com/api/discord/interactions`
-
-## API 端點
-
-- `POST /api/discord/interactions` - Discord interactions
-- `GET /api/entries` - 取得貼文列表
-- `GET /api/entries/:id` - 取得單篇貼文
-- `GET /api/health` - 健康檢查
-
-## Discord 指令
-
-### /貼文
-
-發佈動態到 Stream（立即發佈）
-
-- `content` - 貼文內容
-- `category` - 分類（可選，預設：journal）
-
-### /文章
-
-創建文章草稿
-
-- `content` - 文章內容
-- `category` - 分類（可選，預設：journal）
-
-### /旅記
-
-快速記錄旅行見聞
-
-- `content` - 旅行內容
-
-### /書摘
-
-記錄讀書筆記或書摘
-
-- `content` - 書摘內容
-
-## 開發流程
-
-1. **使用 Discord 發佈內容**
-
-   ```
-   /貼文 content: 今天天氣真好，去咖啡廳坐了一會
-   ```
-
-2. **內容自動保存到 D1**
-   - 生成唯一 ID
-   - 創建 URL-safe slug
-   - 提取摘要
-   - 自動發布或保存為草稿
-
-3. **在網站上查看**
-   - 動態顯示在 `/stream`
-   - 文章顯示在 `/articles`
-   - 按分類瀏覽
-
-## 文件結構
-
-```
-.
-├── apps/
-│   ├── api/          # Cloudflare Worker (Hono)
-│   └── web/          # Astro 網站
-├── packages/
-│   └── shared/       # 共享 types, schemas, utils
-├── db/
-│   ├── schema.sql
-│   └── seeds.sql
-└── docs/
-```
-
-## 部署
-
-### API 部署（Cloudflare Workers）
+API:
 
 ```bash
-npm run build:api
-wrangler deploy -c apps/api/wrangler.toml
+npm run dev:api
 ```
 
-### Web 部署（靜態站點）
+Web:
 
 ```bash
-npm run build:web
-# Deploy apps/web/dist to your hosting
+npm run dev:web
 ```
+
+## 驗證指令
+
+這三個現在都應該能通過：
+
+```bash
+npm run lint
+npm test
+npm run typecheck
+```
+
+## API 與 Discord
+
+### Discord Interactions Endpoint
+
+在 Discord Developer Portal 設定：
+
+```txt
+https://your-api-domain.com/api/discord/interactions
+```
+
+### 目前主要 Discord 能力
+
+- 建立貼文 / 文章 / 旅記 / 書摘
+- 開啟 modal 輸入內容
+- 列出近期文章
+- 編輯 / 典藏 / 刪除
+- 上傳附圖
+- 更新個人資料 / 頭貼 / banner
+
+## 目前主要頁面
+
+- `/`
+- `/about`
+- `/stream`
+- `/articles`
+- `/c/[category]`
+- `/post/[slug]`
+- `/article/[slug]`
 
 ## 故障排除
 
-### 連線問題
+### `astro check` 要求 Node 版本過高
 
-- 確保 API URL 正確設置在 `.env`
-- 檢查 CORS 設置
+請確認當前版本：
 
-### 數據庫錯誤
+```bash
+node -v
+```
 
-- 確保 D1 database_id 已設置
-- 檢查 schema 是否正確初始化
+應為 `22.12.0+`。
 
-### Discord 指令不顯示
+### Discord 指令沒更新
 
-- 重新運行 `npm run register-commands`
-- 檢查 DISCORD_CLIENT_ID 是否正確
+重新註冊：
+
+```bash
+npm run register-commands --workspace=apps/api
+```
+
+### D1 相關錯誤
+
+- 確認 schema / migration 已執行
+- 確認 `wrangler.toml` 內的 D1 binding 與 `database_id` 正確
+
+### 本機頁面抓不到 API
+
+- 確認 `PUBLIC_API_URL` 設定正確
+- 或確認 Cloudflare service binding / middleware 環境正確

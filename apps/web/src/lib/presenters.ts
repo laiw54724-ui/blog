@@ -3,7 +3,6 @@ import type { Entry, EntryMetrics, ResolvedCoverAsset } from '@personal-blog/sha
 import { getResolvedCoverAssetsMap, getEntryMetricsMap } from './data';
 import {
   extractPlainText,
-  stripLeadingMarkdownTitle,
   getFirstMeaningfulParagraph,
   extractH1Title,
   stripFirstH1,
@@ -45,12 +44,9 @@ export interface EntryCardViewModel {
 }
 
 export function getPublicApiBase(): string {
-  if (
-    typeof import.meta !== 'undefined' &&
-    (import.meta as any).env &&
-    (import.meta as any).env.PUBLIC_API_URL
-  ) {
-    return (import.meta as any).env.PUBLIC_API_URL;
+  const publicApiUrl = import.meta.env.PUBLIC_API_URL;
+  if (publicApiUrl) {
+    return publicApiUrl;
   }
   return 'https://personal-blog-api.personal-blog.workers.dev';
 }

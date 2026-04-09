@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createEntry, getEntries, getEntryById, getEntryBySlug, updateEntry, archiveEntry, addTagsToEntry } from '../db';
 
 // Mock D1Database

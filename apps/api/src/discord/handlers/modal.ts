@@ -92,7 +92,7 @@ export async function handleEditModal(
     await updateEntry(db, entryId, fields);
 
     const displayName = title || (entry as any).title || entryId;
-    const statusNote = status ? `　狀態：${status}` : '';
+    const statusNote = status ? ` 狀態：${status}` : '';
     return {
       type: 4,
       data: {

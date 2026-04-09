@@ -75,29 +75,14 @@ export function defaultVisibility(category: string): 'private' | 'unlisted' | 'p
  * const html = await renderMarkdownToHtml(content)
  */
 export function markdownToHtml(markdown: string): string {
-  // Lazy import to avoid issues in environments where marked isn't available
-  let marked: any;
-  try {
-    marked = require('marked');
-  } catch {
-    // Fallback: basic markdown conversion for environments without marked
-    return markdown
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/\n/g, '<br>');
-  }
-
-  const { Marked } = marked;
-  const instance = new Marked({
-    breaks: true,
-    gfm: true,
-  });
-
-  return instance.parse(markdown) as string;
+  return markdown
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
 }

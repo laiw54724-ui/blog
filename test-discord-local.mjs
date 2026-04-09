@@ -1,5 +1,3 @@
-import crypto from 'crypto';
-
 console.log('🧪 Discord 互動本地測試\n');
 
 // Discord interaction test payload - PING (type 1)
@@ -29,9 +27,6 @@ const commandPayload = {
   channel_id: '790598892080857119',
   guild_id: '790598892080857119',
 };
-
-// Discord public key (from Cloudflare secret)
-const publicKey = '4ee1e1896de662808c7ba5f778ba17b55db810be3e0904a67d26499003d663a6';
 
 async function testEndpoint(payload, description) {
   console.log(`\n📨 測試: ${description}`);

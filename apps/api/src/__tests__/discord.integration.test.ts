@@ -93,7 +93,7 @@ describe('POST /api/discord/interactions', () => {
     ['article', '文章'],
     ['travel', '旅記'],
     ['reading', '書摘'],
-  ])('%s command opens a modal', async (key, _label) => {
+  ])('%s command opens a modal', async (key) => {
     const env = createMockEnv(createMockDb());
     const res = await post(env, command(key));
     expect(res.status).toBe(200);

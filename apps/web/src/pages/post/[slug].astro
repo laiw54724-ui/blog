@@ -1,9 +1,11 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
+import CommentBoard from '../../components/CommentBoard.astro'
+import 'katex/dist/katex.min.css'
 import { formatDate } from '@personal-blog/shared'
 import { renderMarkdownToHtml, stripFirstH1, extractH1Title } from '../../lib/markdown'
-import { getEntryBySlug, getAssetsByEntryId } from '../../lib/data'
+import { getEntryBySlug, getAssetsByEntryId, getEntryMetrics, getEntryComments } from '../../lib/data'
 import { applyPageCacheHeaders } from '../../lib/response'
 
 const slug = Astro.params.slug
@@ -24,6 +26,12 @@ const renderedContent = await renderMarkdownToHtml(cleanedMarkdown)
 const assets = await getAssetsByEntryId(entry.id)
 const API_BASE = (import.meta as any).env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
 
+// Fetch metrics and comments via service binding
+const [metrics, initialComments] = await Promise.all([
+  getEntryMetrics(entry.id),
+  getEntryComments(entry.id),
+])
+
 // Build image list: cover first (if set), then extras
 const coverAsset = assets.find((a: any) => a.kind === 'cover')
 const imageAssets = assets.filter((a: any) => a.kind === 'image')
@@ -42,6 +50,11 @@ applyPageCacheHeaders(Astro.response, 'detail')
 <BaseLayout title={`${displayTitle} | Double River`}>
   <ReaderControls client:load />
   <article class="post">
+
+    <!-- Back nav -->
+    <div class="post-nav">
+      <a href="/stream" class="btn-back">← 返回動態</a>
+    </div>
 
     <!-- Top bar: date + category -->
     <div class="post-meta">
@@ -86,14 +99,46 @@ applyPageCacheHeaders(Astro.response, 'detail')
       )}
     </div>
 
-    <!-- Footer nav -->
-    <footer class="post-footer">
-      <a href="/stream" class="btn-back">← 返回動態</a>
-      {entry.category && (
-        <a href={`/c/${entry.category}`} class="btn-category">#{entry.category}</a>
-      )}
-    </footer>
+    <!-- Engagement bar -->
+    <div class="post-engagement">
+      <button
+        class="engage-btn clap-btn"
+        id="clapBtn"
+        data-entry-id={entry.id}
+        data-api-base={API_BASE}
+        aria-label="拍手"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        <span id="clapCount">{metrics.clap_count}</span>
+      </button>
+
+      <a href="#comments" class="engage-btn" aria-label="留言">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span data-metric="comments">{metrics.comment_count}</span>
+      </a>
+
+      <span class="engage-stat" aria-label="閱讀數">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+        <span id="viewCount">{metrics.view_count}</span>
+      </span>
+    </div>
+
   </article>
+
+  <!-- Comments -->
+  <div id="comments" class="post-comments">
+    <CommentBoard
+      entryId={entry.id}
+      initialComments={initialComments}
+      apiBase={API_BASE}
+    />
+  </div>
 
   <!-- Lightbox -->
   <div class="lightbox" id="lightbox" hidden>
@@ -103,11 +148,49 @@ applyPageCacheHeaders(Astro.response, 'detail')
   </div>
 </BaseLayout>
 
-<style>
+<script is:inline>
+  function initCodeCopy(root = document) {
+    root.querySelectorAll('.markdown-content pre').forEach((pre) => {
+      if (!(pre instanceof HTMLElement) || pre.dataset.copyBound === '1') return;
+      pre.dataset.copyBound = '1';
+
+      const code = pre.querySelector('code');
+      if (!(code instanceof HTMLElement)) return;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'code-copy-btn';
+      button.textContent = '複製';
+
+      button.addEventListener('click', async () => {
+        const text = code.innerText;
+        try {
+          await navigator.clipboard.writeText(text);
+          button.textContent = '已複製';
+          window.setTimeout(() => {
+            button.textContent = '複製';
+          }, 1400);
+        } catch {
+          button.textContent = '失敗';
+          window.setTimeout(() => {
+            button.textContent = '複製';
+          }, 1400);
+        }
+      });
+
+      pre.appendChild(button);
+    });
+  }
+
+  initCodeCopy();
+  document.addEventListener('astro:after-swap', () => initCodeCopy());
+</script>
+
+<style is:global>
   article.post {
     max-width: 680px;
     margin: 0 auto;
-    padding: 1.25rem 0 2rem;
+    padding: 1rem 0 1.35rem;
   }
 
   /* ── Meta bar ── */
@@ -115,13 +198,13 @@ applyPageCacheHeaders(Astro.response, 'detail')
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     font-size: 0.85rem;
     color: #999;
   }
 
   .category-tag {
-    color: #0066cc;
+    color: var(--accent, #5b74c8);
     text-decoration: none;
     font-size: 0.82rem;
   }
@@ -131,14 +214,14 @@ applyPageCacheHeaders(Astro.response, 'detail')
   }
 
   .post-title-wrapper {
-    padding: 0 1.25rem;
-    margin-bottom: 0.75rem;
+    padding: 1.1rem 1.1rem 0.8rem;
+    border-bottom: 1px solid var(--border, #dddaf0);
   }
 
   .post-title {
     margin: 0;
-    font-size: 1.65rem;
-    line-height: 1.2;
+    font-size: 1.5rem;
+    line-height: 1.25;
     font-weight: 700;
     color: #212121;
   }
@@ -149,14 +232,14 @@ applyPageCacheHeaders(Astro.response, 'detail')
     border: 1px solid #ece7df;
     border-radius: 14px;
     overflow: hidden;
-    margin-bottom: 1.25rem;
+    margin-bottom: 0.75rem;
   }
 
   /* ── Text content ── */
   .post-text {
-    padding: 1.25rem 1.25rem 1rem;
-    font-size: 1em; /* inherits from article so ReaderControls works */
-    line-height: 1.85;
+    padding: 1rem 1.1rem 0.95rem;
+    font-size: 1rem;
+    line-height: 1.75;
     color: #333;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -206,10 +289,26 @@ applyPageCacheHeaders(Astro.response, 'detail')
     opacity: 1;
   }
 
+  .markdown-content figure.md-figure {
+    margin: 1.2rem 0;
+  }
+
+  .markdown-content figure.md-figure img {
+    margin: 0;
+  }
+
+  .markdown-content figcaption.md-figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    color: #7f7b92;
+    text-align: center;
+  }
+
   .markdown-content ul,
   .markdown-content ol {
-    margin: 0.75em 0;
-    padding-left: 1.4rem;
+    margin: 0.85rem 0 0.85rem 0.15rem;
+    padding-left: 1.45rem;
     list-style-position: outside;
   }
 
@@ -226,18 +325,89 @@ applyPageCacheHeaders(Astro.response, 'detail')
     line-height: 1.75;
   }
 
+  .markdown-content li > ul,
+  .markdown-content li > ol {
+    margin-top: 0.45rem;
+    margin-bottom: 0.55rem;
+  }
+
   .markdown-content li > p {
     margin-bottom: 0.3em;
   }
 
   .markdown-content blockquote {
-    border-left: 3px solid #ddd;
-    padding-left: 1rem;
-    margin: 1em 0;
-    color: #666;
-    background: #fafafa;
-    padding: 0.75rem 1rem;
-    border-radius: 4px;
+    border-left: 4px solid #a8b8e0;
+    padding: 0.6rem 1rem 0.6rem 1.1rem;
+    margin: 1rem 0;
+    color: #555;
+    background: #f3f5fb;
+    border-radius: 0 6px 6px 0;
+    font-style: normal;
+  }
+
+  .markdown-content blockquote > :first-child {
+    margin-top: 0;
+  }
+
+  .markdown-content blockquote > :last-child {
+    margin-bottom: 0;
+  }
+
+  .markdown-content blockquote ol,
+  .markdown-content blockquote ul {
+    margin-left: 0.1rem;
+  }
+
+  .markdown-content .callout {
+    border-left-width: 5px;
+    border-left-style: solid;
+    padding: 0.8rem 1rem 0.85rem 1.05rem;
+  }
+
+  .markdown-content .callout-title {
+    font-size: 0.77rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 0.45rem;
+  }
+
+  .markdown-content .callout-note {
+    border-left-color: #7d8fdc;
+    background: #f5f7ff;
+  }
+
+  .markdown-content .callout-note .callout-title {
+    color: #5369c6;
+  }
+
+  .markdown-content .callout-tip {
+    border-left-color: #5eaf8b;
+    background: #f2fbf6;
+  }
+
+  .markdown-content .callout-tip .callout-title {
+    color: #32805f;
+  }
+
+  .markdown-content .callout-info {
+    border-left-color: #5da7c7;
+    background: #f1f9fc;
+  }
+
+  .markdown-content .callout-info .callout-title {
+    color: #2e7390;
+  }
+
+  .markdown-content .callout-warn,
+  .markdown-content .callout-caution {
+    border-left-color: #de8f5d;
+    background: #fff7f1;
+  }
+
+  .markdown-content .callout-warn .callout-title,
+  .markdown-content .callout-caution .callout-title {
+    color: #b7662d;
   }
 
   .markdown-content code {
@@ -255,12 +425,33 @@ applyPageCacheHeaders(Astro.response, 'detail')
     border-radius: 4px;
     overflow-x: auto;
     margin: 1em 0;
+    position: relative;
   }
 
   .markdown-content pre code {
     background: none;
     padding: 0;
     font-size: 0.9em;
+  }
+
+  .markdown-content .code-copy-btn {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.7rem;
+    border: 1px solid #d5dcf1;
+    background: rgba(255, 255, 255, 0.94);
+    color: #5164b6;
+    border-radius: 999px;
+    padding: 0.28rem 0.62rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .markdown-content .code-copy-btn:hover {
+    background: #eef2ff;
+    color: #4053a8;
   }
 
   .markdown-content a {
@@ -336,13 +527,34 @@ applyPageCacheHeaders(Astro.response, 'detail')
   }
 
   /* KaTeX styles */
-  .katex {
+  .markdown-content .katex {
     font-size: 1.1em;
+    white-space: normal;
   }
 
-  .katex-display {
+  .markdown-content .katex-mathml {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .markdown-content .katex-display {
     margin: 1rem 0;
     text-align: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.15rem 0;
+  }
+
+  .markdown-content .katex-display > .katex {
+    display: inline-block;
+    max-width: 100%;
   }
 
   /* Highlight.js styles (GitHub theme) */
@@ -543,36 +755,123 @@ applyPageCacheHeaders(Astro.response, 'detail')
     background: rgba(255, 255, 255, 0.28);
   }
 
-  /* ── Footer ── */
-  .post-footer {
+  /* ── Engagement bar ── */
+  .post-engagement {
     display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.75rem;
+    padding-left: 0.1rem;
   }
 
-  .btn-back,
-  .btn-category {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
+  .engage-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 46px;
+    padding: 0.7rem 1rem;
+    border-radius: 999px;
+    border: 1px solid #dcd8ee;
+    background: rgba(255, 255, 255, 0.75);
+    color: var(--text-muted, #8a88a8);
+    font-size: 0.95rem;
+    cursor: pointer;
     text-decoration: none;
-    font-size: 0.88rem;
     transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .engage-btn:hover {
+    border-color: var(--accent, #5b74c8);
+    color: var(--accent, #5b74c8);
+    background: var(--accent-bg, #eef1fb);
+  }
+
+  .engage-btn.clapped {
+    border-color: #f2a7a4;
+    color: #ef524d;
+    background: rgba(255, 244, 244, 0.95);
+  }
+
+  .engage-btn.clapped svg {
+    fill: #e44;
+    stroke: #e44;
+  }
+
+  .engage-btn svg,
+  .engage-stat svg {
+    width: 21px;
+    height: 21px;
+    flex-shrink: 0;
+  }
+
+  .engage-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 46px;
+    padding: 0.7rem 1rem;
+    border-radius: 999px;
+    border: 1px solid #dcd8ee;
+    background: rgba(255, 255, 255, 0.75);
+    font-size: 0.95rem;
+    color: var(--text-muted, #8a88a8);
+  }
+
+  /* ── Comments section ── */
+  .post-comments {
+    max-width: 680px;
+    margin: 0.5rem auto 2rem;
+    padding: 1rem 0 0;
+    border-top: 1px solid var(--border, #dddaf0);
+  }
+
+  /* ── Back nav ── */
+  .post-nav {
+    margin-bottom: 0.6rem;
   }
 
   .btn-back {
-    background: #f0f0f0;
-    color: #444;
+    display: inline-block;
+    font-size: 0.85rem;
+    color: var(--text-muted, #8a88a8);
+    text-decoration: none;
+    transition: color 0.15s;
   }
 
-  .btn-back:hover { background: #e0e0e0; }
-
-  .btn-category {
-    color: #0066cc;
-    background: #eef5ff;
+  .btn-back:hover {
+    color: var(--accent, #5b74c8);
   }
 
-  .btn-category:hover { background: #deeaff; }
+  @media (max-width: 640px) {
+    article.post {
+      padding-top: 0.8rem;
+    }
+
+    .post-title-wrapper {
+      padding: 1rem 0.95rem 0.7rem;
+    }
+
+    .post-text {
+      padding: 0.95rem 0.95rem 0.9rem;
+    }
+
+    .post-title {
+      font-size: 1.32rem;
+    }
+
+    .post-engagement {
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
+
+    .engage-btn,
+    .engage-stat {
+      min-height: 42px;
+      padding: 0.58rem 0.85rem;
+      font-size: 0.9rem;
+    }
+  }
 
   /* ── Mobile ── */
   @media (max-width: 640px) {
@@ -616,4 +915,45 @@ applyPageCacheHeaders(Astro.response, 'detail')
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeLightbox();
   });
+
+  // ── Clap button ──────────────────────────────────────────────────────────
+  const clapBtn = document.getElementById('clapBtn') as HTMLButtonElement | null;
+  const clapCount = document.getElementById('clapCount');
+  if (clapBtn && clapCount) {
+    const CLAP_KEY = `clapped:${clapBtn.dataset.entryId}`;
+    if (localStorage.getItem(CLAP_KEY)) {
+      clapBtn.classList.add('clapped');
+    }
+
+    clapBtn.addEventListener('click', async () => {
+      const apiBase = clapBtn.dataset.apiBase;
+      const entryId = clapBtn.dataset.entryId;
+      try {
+        const res = await fetch(`${apiBase}/api/entries/${entryId}/clap`, { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json() as { clap_count: number };
+          clapCount.textContent = String(data.clap_count);
+          clapBtn.classList.add('clapped');
+          localStorage.setItem(CLAP_KEY, '1');
+        }
+      } catch {}
+    });
+  }
+
+  // ── View tracking ────────────────────────────────────────────────────────
+  (() => {
+    const btn = document.getElementById('clapBtn') as HTMLButtonElement | null;
+    if (!btn) return;
+    const apiBase = btn.dataset.apiBase;
+    const entryId = btn.dataset.entryId;
+    const VIEW_KEY = `viewed:${entryId}`;
+    if (sessionStorage.getItem(VIEW_KEY)) return;
+    sessionStorage.setItem(VIEW_KEY, '1');
+    fetch(`${apiBase}/api/entries/${entryId}/view`, { method: 'POST' }).then((r) => {
+      if (r.ok) {
+        const viewEl = document.getElementById('viewCount');
+        if (viewEl) viewEl.textContent = String(parseInt(viewEl.textContent || '0') + 1);
+      }
+    }).catch(() => {});
+  })();
 </script>

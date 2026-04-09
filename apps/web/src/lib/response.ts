@@ -16,7 +16,7 @@ export type CacheType = 'stream' | 'articles' | 'detail' | 'private';
 export function applyPageCacheHeaders(
   response: { headers: Headers } | Response,
   type: CacheType
-): any {
+): { headers: Headers } | Response {
   switch (type) {
     case 'stream':
       // 動態流 - 短快取，保持新鮮度

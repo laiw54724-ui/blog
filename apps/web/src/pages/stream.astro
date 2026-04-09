@@ -1,15 +1,16 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
-import EntryCard from '../components/EntryCard.astro'
+import PostFeedCard from '../components/PostFeedCard.astro'
 import SystemNoticeCard from '../components/SystemNoticeCard.astro'
-import { getPosts, getArticles } from '../lib/data'
+import { getPosts, getArticles, getProfile } from '../lib/data'
 import { buildEntryCardModels } from '../lib/presenters'
 import { buildUnifiedFeed, isSystemNotice } from '../lib/feed'
 import { applyPageCacheHeaders } from '../lib/response'
 
-const [allPosts, allArticles] = await Promise.all([
+const [allPosts, allArticles, profile] = await Promise.all([
   getPosts(),
   getArticles(),
+  getProfile(),
 ])
 
 const [postModels, articleModels] = await Promise.all([
@@ -43,16 +44,17 @@ applyPageCacheHeaders(Astro.response, 'stream')
                   isSystemNotice(item) ? (
                     <SystemNoticeCard message={item.message} href={item.href} />
                   ) : (
-                    <EntryCard
+                    <PostFeedCard
                       href={item.href}
                       title={item.displayTitle}
                       excerpt={item.displayExcerpt}
                       date={item.displayDate}
+                      displayName={profile.name}
+                      avatarUrl={profile.avatar_url}
                       categoryLabel={item.categoryLabel}
                       coverUrl={item.coverUrl}
                       coverAlt={item.coverAlt}
                       stats={item.metrics}
-                      variant="compact"
                     />
                   )
                 )}

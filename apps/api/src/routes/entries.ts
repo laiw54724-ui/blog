@@ -10,11 +10,20 @@ import {
   archiveEntry,
   deleteEntry,
   getAssetsByEntryId,
+  checkAndUpdateRateLimit,
 } from '@personal-blog/shared/db';
 
 interface Env {
   DB: D1Database;
   API_SECRET?: string;
+}
+
+interface EntryMetricRow {
+  entry_id: string;
+  view_count: number;
+  clap_count: number;
+  comment_count: number;
+  last_viewed_at: string | null;
 }
 
 const router = new Hono<{ Bindings: Env }>();
@@ -66,8 +75,8 @@ router.get('/metrics', async (c) => {
       .bind(...ids)
       .all();
 
-    const map: Record<string, any> = {};
-    for (const row of (result.results || []) as any[]) {
+    const map: Record<string, EntryMetricRow> = {};
+    for (const row of ((result.results || []) as unknown as EntryMetricRow[])) {
       map[row.entry_id] = row;
     }
     // Fill zeros for entries with no metrics yet
@@ -81,6 +90,69 @@ router.get('/metrics', async (c) => {
   } catch (error) {
     console.error('Error fetching batch metrics:', error);
     return c.json({ error: 'Failed to fetch metrics' }, 500);
+  }
+});
+
+// GET /api/entries/assets?ids=id1,id2,... - Batch fetch assets (fixes N+1)
+router.get('/assets', async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: 'Database not configured' }, 500);
+
+  const raw = c.req.query('ids') || '';
+  const ids = raw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50);
+  if (ids.length === 0) return c.json({ data: {} });
+
+  try {
+    const placeholders = ids.map(() => '?').join(',');
+    const result = await db
+      .prepare(`SELECT * FROM assets WHERE entry_id IN (${placeholders}) ORDER BY sort_order ASC`)
+      .bind(...ids)
+      .all();
+
+    const map: Record<string, unknown[]> = {};
+    for (const row of result.results || []) {
+      const asset = row as { entry_id?: string };
+      if (!asset.entry_id) continue;
+      if (!map[asset.entry_id]) map[asset.entry_id] = [];
+      map[asset.entry_id].push(row);
+    }
+
+    return c.json({ data: map });
+  } catch (error) {
+    console.error('Error fetching batch assets:', error);
+    return c.json({ error: 'Failed to fetch assets' }, 500);
+  }
+});
+
+// GET /api/entries/search?q=keyword
+router.get('/search', async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: 'Database not configured' }, 500);
+
+  const q = (c.req.query('q') || '').trim();
+  if (!q) return c.json({ data: [], count: 0 });
+  if (q.length > 100) return c.json({ error: 'Query too long' }, 400);
+
+  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50);
+  const like = `%${q}%`;
+
+  try {
+    const result = await db
+      .prepare(
+        `SELECT * FROM entries
+         WHERE status = 'published' AND visibility = 'public'
+           AND (title LIKE ? OR content_markdown LIKE ? OR excerpt LIKE ?)
+         ORDER BY published_at DESC
+         LIMIT ?`
+      )
+      .bind(like, like, like, limit)
+      .all();
+
+    const data = result.results || [];
+    return c.json({ data, count: data.length });
+  } catch (error) {
+    console.error('Error searching entries:', error);
+    return c.json({ error: 'Search failed' }, 500);
   }
 });
 
@@ -174,8 +246,8 @@ router.get('/:id/metrics', async (c) => {
 });
 
 // Auth middleware for write operations
-function requireAuth(c: Context): boolean {
-  const secret = (c.env as any)?.API_SECRET;
+function requireAuth(c: Context<{ Bindings: Env }>): boolean {
+  const secret = c.env?.API_SECRET;
   if (!secret) return false;
   const auth = c.req.header('Authorization');
   return auth === `Bearer ${secret}`;
@@ -206,7 +278,9 @@ router.put('/:id', async (c) => {
       return c.json({ error: 'Invalid input', details: parsed.error.flatten() }, 400);
     }
 
-    const { tags, ...fields } = parsed.data;
+    const fields = Object.fromEntries(
+      Object.entries(parsed.data).filter(([key]) => key !== 'tags')
+    );
     await updateEntry(db, id, fields);
 
     const updated = await getEntryById(db, id);
@@ -270,35 +344,61 @@ router.delete('/:id/hard', async (c) => {
   }
 });
 
-// GET /api/entries/search?q=keyword
-router.get('/search', async (c) => {
+// POST /api/entries/:id/clap - increment clap count (anonymous)
+router.post('/:id/clap', async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: 'Database not configured' }, 500);
 
-  const q = (c.req.query('q') || '').trim();
-  if (!q) return c.json({ data: [], count: 0 });
-  if (q.length > 100) return c.json({ error: 'Query too long' }, 400);
-
-  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50);
-  const like = `%${q}%`;
-
+  const id = c.req.param('id');
   try {
-    const result = await db
-      .prepare(
-        `SELECT * FROM entries
-         WHERE status = 'published' AND visibility = 'public'
-           AND (title LIKE ? OR content_markdown LIKE ? OR excerpt LIKE ?)
-         ORDER BY published_at DESC
-         LIMIT ?`
-      )
-      .bind(like, like, like, limit)
-      .all();
+    const ip =
+      c.req.header('CF-Connecting-IP') ||
+      c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ||
+      'unknown';
+    const allowed = await checkAndUpdateRateLimit(db, `${ip}:clap:${id}`, 10);
+    if (!allowed) {
+      return c.json({ error: 'Too many claps, please wait a moment' }, 429);
+    }
 
-    const data = result.results || [];
-    return c.json({ data, count: data.length });
+    await db
+      .prepare(
+        `INSERT INTO entry_metrics (entry_id, clap_count)
+         VALUES (?, 1)
+         ON CONFLICT(entry_id) DO UPDATE SET clap_count = clap_count + 1`
+      )
+      .bind(id)
+      .run();
+    const row = (await db
+      .prepare('SELECT clap_count FROM entry_metrics WHERE entry_id = ?')
+      .bind(id)
+      .first()) as { clap_count?: number } | null;
+    return c.json({ clap_count: row?.clap_count ?? 1 });
   } catch (error) {
-    console.error('Error searching entries:', error);
-    return c.json({ error: 'Search failed' }, 500);
+    console.error('Error recording clap:', error);
+    return c.json({ error: 'Failed' }, 500);
+  }
+});
+
+// POST /api/entries/:id/view - increment view count
+router.post('/:id/view', async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: 'Database not configured' }, 500);
+
+  const id = c.req.param('id');
+  try {
+    await db
+      .prepare(
+        `INSERT INTO entry_metrics (entry_id, view_count, last_viewed_at)
+         VALUES (?, 1, CURRENT_TIMESTAMP)
+         ON CONFLICT(entry_id) DO UPDATE SET
+           view_count = view_count + 1,
+           last_viewed_at = CURRENT_TIMESTAMP`
+      )
+      .bind(id)
+      .run();
+    return c.json({ ok: true });
+  } catch {
+    return c.json({ ok: false }, 500);
   }
 });
 

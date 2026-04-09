@@ -1,5 +1,5 @@
 import type { EntryCardViewModel } from './presenters';
-import { ENTRY_TYPE_LABELS, CATEGORY_LABELS } from './presenters';
+import { ENTRY_TYPE_LABELS } from './presenters';
 
 export interface SystemNotice {
   kind: 'system-notice';
@@ -35,7 +35,6 @@ export function buildUnifiedFeed(
   // Articles become system notices
   for (const article of articles) {
     const typeLabel = ENTRY_TYPE_LABELS[article.entryType] || '文章';
-    const categoryLabel = CATEGORY_LABELS[article.categoryLabel] || article.categoryLabel;
 
     items.push({
       kind: 'system-notice',

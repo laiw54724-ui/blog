@@ -7,13 +7,15 @@ import { defineConfig } from 'eslint/config';
 export default defineConfig([
   {
     ignores: [
-      'node_modules/',
-      'dist/',
-      '.astro/',
-      '.wrangler/',
-      'coverage/',
-      'build/',
-      '.next/',
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.astro/**',
+      '**/.wrangler/**',
+      '**/coverage/**',
+      '**/build/**',
+      '**/.next/**',
+      '**/.nyc_output/**',
+      '**/.DS_Store',
       '**/*.generated.*',
       '**/vendor/**',
       '**/*.astro',
@@ -31,5 +33,27 @@ export default defineConfig([
     extends: [js.configs.recommended],
   },
   ...tseslint.configs.recommended,
+  {
+    files: [
+      '**/__tests__/**/*.{js,mjs,cjs,ts,mts,cts}',
+      '**/*.test.{js,mjs,cjs,ts,mts,cts}',
+      'test-*.mjs',
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    files: ['apps/api/src/discord/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    files: ['apps/api/src/scripts/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
   prettier,
 ]);

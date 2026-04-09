@@ -2,7 +2,9 @@
 import BaseLayout from '../../layouts/BaseLayout.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
 import { formatDate } from '@personal-blog/shared'
-import { renderMarkdownToHtml } from '../../lib/markdown'
+import 'katex/dist/katex.min.css'
+import type { Asset } from '@personal-blog/shared'
+import { renderMarkdownToHtml, stripFirstH1 } from '../../lib/markdown'
 import { getEntryBySlug, getAssetsByEntryId } from '../../lib/data'
 import { applyPageCacheHeaders } from '../../lib/response'
 
@@ -16,14 +18,15 @@ if (!entry) {
   return Astro.redirect('/articles')
 }
 
-const renderedContent = await renderMarkdownToHtml(entry.content_markdown)
-const displayTitle = entry.title?.trim() || formatDate(entry.created_at)
+const displayTitle = entry.title?.replace(/^#+\s+/, '').trim() || formatDate(entry.created_at)
+const cleanedMarkdown = stripFirstH1(entry.content_markdown || '')
+const renderedContent = await renderMarkdownToHtml(cleanedMarkdown)
 
 // Fetch assets (cover image, etc.)
 const assets = await getAssetsByEntryId(entry.id)
-const coverAsset = assets.find((a: any) => a.kind === 'cover')
-const imageAssets = assets.filter((a: any) => a.kind === 'image')
-const API_BASE = (import.meta as any).env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
+const coverAsset = assets.find((asset) => asset.kind === 'cover')
+const imageAssets = assets.filter((asset) => asset.kind === 'image')
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
 
 // 應用快取策略：10分鐘 CDN 快取 + 1小時過期後仍可用
 applyPageCacheHeaders(Astro.response, 'detail')
@@ -40,7 +43,6 @@ applyPageCacheHeaders(Astro.response, 'detail')
         )}
       </div>
       <h1>{displayTitle}</h1>
-      {entry.excerpt && <p class="excerpt">{entry.excerpt}</p>}
       {coverAsset && (
         <img
           class="cover-image"
@@ -56,7 +58,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
       <div class="markdown-content" set:html={renderedContent} />
       {imageAssets.length > 0 && (
         <div class="article-images">
-          {imageAssets.map((asset: any) => (
+          {imageAssets.map((asset: Asset) => (
             <img
               src={`${API_BASE}/api/assets/${asset.storage_key}`}
               alt={asset.alt_text || ''}
@@ -82,42 +84,84 @@ applyPageCacheHeaders(Astro.response, 'detail')
   </article>
 </BaseLayout>
 
-<style>
+<script is:inline>
+  function initCodeCopy(root = document) {
+    root.querySelectorAll('.markdown-content pre').forEach((pre) => {
+      if (!(pre instanceof HTMLElement) || pre.dataset.copyBound === '1') return;
+      pre.dataset.copyBound = '1';
+
+      const code = pre.querySelector('code');
+      if (!(code instanceof HTMLElement)) return;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'code-copy-btn';
+      button.textContent = '複製';
+
+      button.addEventListener('click', async () => {
+        const text = code.innerText;
+        try {
+          await navigator.clipboard.writeText(text);
+          button.textContent = '已複製';
+          window.setTimeout(() => {
+            button.textContent = '複製';
+          }, 1400);
+        } catch {
+          button.textContent = '失敗';
+          window.setTimeout(() => {
+            button.textContent = '複製';
+          }, 1400);
+        }
+      });
+
+      pre.appendChild(button);
+    });
+  }
+
+  initCodeCopy();
+  document.addEventListener('astro:after-swap', () => initCodeCopy());
+</script>
+
+<style is:global>
   article.article {
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 1.5rem 0;
+    padding: 1.2rem 0 1.8rem;
   }
 
   .article-header {
-    margin-bottom: 2.5rem;
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid #e8e2d9;
+    margin-bottom: 2rem;
+    padding-bottom: 1.35rem;
+    border-bottom: 1px solid #e6deef;
   }
 
   .article-meta {
     display: flex;
     gap: 1rem;
-    font-size: 0.9rem;
-    color: #999;
-    margin-bottom: 0.75rem;
+    font-size: 0.86rem;
+    color: #8b88a6;
+    margin-bottom: 0.8rem;
+    text-transform: lowercase;
   }
 
   .category {
-    color: #0066cc;
+    color: #4b6fc8;
+    font-weight: 600;
   }
 
   .article-header h1 {
-    font-size: 1.85rem;
-    line-height: 1.4;
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    line-height: 1.25;
+    letter-spacing: -0.02em;
     font-weight: 700;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
   }
 
   .excerpt {
-    font-size: 1.05rem;
-    color: #666;
-    line-height: 1.7;
+    max-width: 56rem;
+    font-size: 1.08rem;
+    color: #6f6c7f;
+    line-height: 1.65;
   }
 
   .cover-image {
@@ -141,20 +185,24 @@ applyPageCacheHeaders(Astro.response, 'detail')
   }
 
   .article-content {
-    font-size: 1.1rem;
-    line-height: 2;
+    font-size: 1.08rem;
+    line-height: 1.9;
     color: #333;
-    margin: 2rem 0;
+    margin: 1.6rem 0;
   }
 
   .markdown-content {
-    font-size: 1.1rem;
-    line-height: 2;
-    color: #333;
+    font-size: 1.08rem;
+    line-height: 1.9;
+    color: #2d2d38;
+  }
+
+  .markdown-content > * + * {
+    margin-top: 1.15rem;
   }
 
   .markdown-content p {
-    margin-bottom: 1.5rem;
+    margin-bottom: 0;
   }
 
   .markdown-content h1,
@@ -163,17 +211,17 @@ applyPageCacheHeaders(Astro.response, 'detail')
   .markdown-content h4,
   .markdown-content h5,
   .markdown-content h6 {
-    margin-top: 2.5rem;
-    margin-bottom: 1rem;
+    margin-top: 2rem;
+    margin-bottom: 0.4rem;
     font-weight: 600;
-    line-height: 1.4;
-    color: #1d1d1f;
+    line-height: 1.25;
+    color: #1d2034;
     position: relative;
   }
 
-  .markdown-content h1 { font-size: 1.6rem; }
-  .markdown-content h2 { font-size: 1.4rem; }
-  .markdown-content h3 { font-size: 1.25rem; }
+  .markdown-content h1 { font-size: 1.8rem; }
+  .markdown-content h2 { font-size: 1.55rem; }
+  .markdown-content h3 { font-size: 1.3rem; }
 
   .markdown-content .heading-anchor {
     color: #666;
@@ -192,13 +240,36 @@ applyPageCacheHeaders(Astro.response, 'detail')
     opacity: 1;
   }
 
+  .markdown-content figure.md-figure {
+    margin: 1.4rem 0;
+  }
+
+  .markdown-content figure.md-figure img {
+    margin: 0;
+  }
+
+  .markdown-content figcaption.md-figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #7a7890;
+    text-align: center;
+  }
+
   .markdown-content ul,
   .markdown-content ol {
-    margin: 1rem 0 1.5rem 1.5rem;
+    margin: 0.85rem 0 0.85rem 0.15rem;
+    padding-left: 1.45rem;
   }
 
   .markdown-content li {
     margin-bottom: 0.5rem;
+  }
+
+  .markdown-content li > ul,
+  .markdown-content li > ol {
+    margin-top: 0.45rem;
+    margin-bottom: 0.55rem;
   }
 
   .markdown-content li > p {
@@ -206,20 +277,21 @@ applyPageCacheHeaders(Astro.response, 'detail')
   }
 
   .markdown-content code {
-    background: #f4f4f4;
+    background: #eef1fb;
     padding: 0.15rem 0.4rem;
-    border-radius: 3px;
-    font-family: 'Courier New', monospace;
+    border-radius: 6px;
+    font-family: 'SFMono-Regular', 'Cascadia Code', 'Courier New', monospace;
     font-size: 0.9em;
   }
 
   .markdown-content pre {
-    background: #f8f8f8;
-    border-left: 3px solid #ddd;
-    padding: 1rem 1.25rem;
-    border-radius: 4px;
+    background: #f7f8fc;
+    border: 1px solid #e0e5f3;
+    padding: 1rem 1.1rem;
+    border-radius: 12px;
     overflow-x: auto;
-    margin: 1.5rem 0;
+    margin: 1.3rem 0;
+    position: relative;
   }
 
   .markdown-content pre code {
@@ -227,14 +299,99 @@ applyPageCacheHeaders(Astro.response, 'detail')
     padding: 0;
   }
 
+  .markdown-content .code-copy-btn {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    border: 1px solid #d5dcf1;
+    background: rgba(255, 255, 255, 0.92);
+    color: #5164b6;
+    border-radius: 999px;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .markdown-content .code-copy-btn:hover {
+    background: #eef2ff;
+    color: #4053a8;
+  }
+
   .markdown-content blockquote {
-    border-left: 3px solid #ddd;
-    padding-left: 1.25rem;
-    margin: 1.5rem 0;
-    color: #666;
-    background: #fafafa;
-    padding: 1rem 1.25rem;
-    border-radius: 4px;
+    border-left: 4px solid #aab8ea;
+    margin: 1.3rem 0;
+    color: #57556b;
+    background: #f6f7fe;
+    padding: 0.9rem 1.1rem 0.9rem 1.15rem;
+    border-radius: 0 12px 12px 0;
+    font-style: normal;
+  }
+
+  .markdown-content blockquote > :first-child {
+    margin-top: 0;
+  }
+
+  .markdown-content blockquote > :last-child {
+    margin-bottom: 0;
+  }
+
+  .markdown-content blockquote ol,
+  .markdown-content blockquote ul {
+    margin-left: 0.1rem;
+  }
+
+  .markdown-content .callout {
+    border-left-width: 5px;
+    border-left-style: solid;
+    padding: 0.95rem 1.1rem 0.95rem 1.15rem;
+  }
+
+  .markdown-content .callout-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 0.55rem;
+  }
+
+  .markdown-content .callout-note {
+    border-left-color: #7d8fdc;
+    background: #f5f7ff;
+  }
+
+  .markdown-content .callout-note .callout-title {
+    color: #5369c6;
+  }
+
+  .markdown-content .callout-tip {
+    border-left-color: #5eaf8b;
+    background: #f2fbf6;
+  }
+
+  .markdown-content .callout-tip .callout-title {
+    color: #32805f;
+  }
+
+  .markdown-content .callout-info {
+    border-left-color: #5da7c7;
+    background: #f1f9fc;
+  }
+
+  .markdown-content .callout-info .callout-title {
+    color: #2e7390;
+  }
+
+  .markdown-content .callout-warn,
+  .markdown-content .callout-caution {
+    border-left-color: #de8f5d;
+    background: #fff7f1;
+  }
+
+  .markdown-content .callout-warn .callout-title,
+  .markdown-content .callout-caution .callout-title {
+    color: #b7662d;
   }
 
   .markdown-content a {
@@ -251,14 +408,14 @@ applyPageCacheHeaders(Astro.response, 'detail')
   .markdown-content img {
     max-width: 100%;
     height: auto;
-    border-radius: 4px;
-    margin: 1.5rem 0;
+    border-radius: 10px;
+    margin: 1rem 0;
   }
 
   .markdown-content hr {
     border: none;
-    border-top: 1px solid #e8e2d9;
-    margin: 2rem 0;
+    border-top: 1px solid #e6deef;
+    margin: 1.8rem 0;
   }
 
   /* Tables */
@@ -277,7 +434,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
   }
 
   .markdown-content th {
-    background: #f8f8f8;
+    background: #f4f6fd;
     font-weight: 600;
   }
 
@@ -288,6 +445,25 @@ applyPageCacheHeaders(Astro.response, 'detail')
   /* Task lists */
   .markdown-content input[type="checkbox"] {
     margin-right: 0.5rem;
+  }
+
+  .markdown-content .contains-task-list {
+    list-style: none;
+    margin-left: 0;
+    padding-left: 0;
+  }
+
+  .markdown-content details {
+    border: 1px solid #dfe2f2;
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    background: #fcfcff;
+  }
+
+  .markdown-content summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #303654;
   }
 
   /* Footnotes */
@@ -308,13 +484,34 @@ applyPageCacheHeaders(Astro.response, 'detail')
   }
 
   /* KaTeX styles */
-  .katex {
+  .markdown-content .katex {
     font-size: 1.1em;
+    white-space: normal;
   }
 
-  .katex-display {
+  .markdown-content .katex-mathml {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .markdown-content .katex-display {
     margin: 1rem 0;
     text-align: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.15rem 0;
+  }
+
+  .markdown-content .katex-display > .katex {
+    display: inline-block;
+    max-width: 100%;
   }
 
   /* Highlight.js styles (GitHub theme) */

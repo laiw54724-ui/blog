@@ -1,0 +1,331 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import PostFeedCard from '../components/PostFeedCard.astro'
+import { getPosts, getArticles, getProfile } from '../lib/data'
+import { buildEntryCardModels } from '../lib/presenters'
+import { applyPageCacheHeaders } from '../lib/response'
+
+const [profile, allPosts, allArticles] = await Promise.all([
+  getProfile(),
+  getPosts(),
+  getArticles(),
+])
+
+const recentPosts = await buildEntryCardModels(allPosts.slice(0, 8), { excerptLength: 120 })
+
+const postCount = allPosts.length
+const articleCount = allArticles.length
+
+applyPageCacheHeaders(Astro.response, 'stream')
+---
+
+<BaseLayout
+  title={`${profile.name} | life·`}
+  description={profile.bio || '動態留下當下，文章留下價值。'}
+>
+  <div class="profile-page">
+
+    <!-- Banner -->
+    <div class="profile-banner">
+      {profile.banner_url
+        ? <img class="banner-img" src={profile.banner_url} alt="banner" />
+        : <div class="banner-placeholder" />
+      }
+    </div>
+
+    <!-- Avatar + info -->
+    <div class="profile-card">
+      <div class="avatar-wrap">
+        {profile.avatar_url
+          ? <img class="avatar-img" src={profile.avatar_url} alt={profile.name} />
+          : <div class="avatar-placeholder">{profile.name[0]?.toUpperCase() || 'L'}</div>
+        }
+      </div>
+
+      <div class="profile-info">
+        <h1 class="profile-name">
+          {profile.name}<span class="name-dot">·</span>
+        </h1>
+
+        {profile.bio && (
+          <p class="profile-bio">{profile.bio}</p>
+        )}
+
+        {profile.links.length > 0 && (
+          <div class="profile-links">
+            {profile.links.map((link) => (
+              <a href={link.url} class="profile-link" target="_blank" rel="noopener noreferrer">
+                🔗 {link.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div class="profile-stats">
+        <a href="/stream" class="stat-item">
+          <span class="stat-count">{postCount}</span>
+          <span class="stat-label">動態</span>
+        </a>
+        <a href="/articles" class="stat-item">
+          <span class="stat-count">{articleCount}</span>
+          <span class="stat-label">文章</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Feed -->
+    <div class="profile-feed">
+      <h2 class="feed-heading">最近動態</h2>
+      {recentPosts.length > 0
+        ? recentPosts.map((vm) => (
+            <PostFeedCard
+              href={vm.href}
+              title={vm.displayTitle}
+              excerpt={vm.displayExcerpt}
+              date={vm.displayDate}
+              displayName={profile.name}
+              avatarUrl={profile.avatar_url}
+              categoryLabel={vm.categoryLabel}
+              coverUrl={vm.coverUrl}
+              coverAlt={vm.coverAlt}
+              stats={vm.metrics}
+            />
+          ))
+        : <p class="empty">還沒有任何動態</p>
+      }
+      {allPosts.length > 8 && (
+        <a href="/stream" class="view-all">查看全部動態 →</a>
+      )}
+    </div>
+
+  </div>
+</BaseLayout>
+
+<style>
+  .profile-page {
+    max-width: 680px;
+    margin: 0 auto;
+    padding-bottom: 3rem;
+  }
+
+  /* ── Banner ── */
+  .profile-banner {
+    margin: -2rem -1.5rem 0;
+    height: 200px;
+    overflow: hidden;
+    border-radius: 0 0 0 0;
+  }
+
+  .banner-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .banner-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--accent, #5b74c8) 0%, #8fa3e8 60%, #b8c6f5 100%);
+  }
+
+  /* ── Profile card ── */
+  .profile-card {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #dddaf0);
+    border-radius: 14px;
+    padding: 1.25rem 1.5rem 1.25rem;
+    margin-top: -1.25rem;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+  }
+
+  /* ── Avatar ── */
+  .avatar-wrap {
+    flex-shrink: 0;
+    margin-top: -3rem;
+  }
+
+  .avatar-img,
+  .avatar-placeholder {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 3px solid var(--bg, #f5f4fb);
+  }
+
+  .avatar-img {
+    object-fit: cover;
+    display: block;
+  }
+
+  .avatar-placeholder {
+    background: var(--accent, #5b74c8);
+    color: #fff;
+    font-size: 1.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+  }
+
+  /* ── Info ── */
+  .profile-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .profile-name {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 0 0 0.35rem;
+    color: var(--text, #26253a);
+  }
+
+  .name-dot {
+    color: var(--accent, #5b74c8);
+  }
+
+  .profile-bio {
+    margin: 0 0 0.6rem;
+    color: var(--text-muted, #8a88a8);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .profile-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .profile-link {
+    font-size: 0.82rem;
+    color: var(--accent, #5b74c8);
+    text-decoration: none;
+    background: var(--accent-bg, #eef1fb);
+    padding: 0.2rem 0.65rem;
+    border-radius: 20px;
+    transition: background 0.15s;
+  }
+
+  .profile-link:hover {
+    background: #dde4f8;
+    text-decoration: none;
+  }
+
+  /* ── Stats ── */
+  .profile-stats {
+    display: flex;
+    gap: 1.25rem;
+    align-self: flex-end;
+    margin-left: auto;
+  }
+
+  .stat-item {
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+    transition: color 0.15s;
+  }
+
+  .stat-item:hover .stat-count {
+    color: var(--accent, #5b74c8);
+  }
+
+  .stat-count {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text, #26253a);
+    line-height: 1;
+  }
+
+  .stat-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted, #8a88a8);
+    margin-top: 0.2rem;
+  }
+
+  /* ── Feed ── */
+  .profile-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .feed-heading {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-muted, #8a88a8);
+    margin: 0 0 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.78rem;
+  }
+
+  .empty {
+    text-align: center;
+    color: var(--text-muted, #8a88a8);
+    padding: 2rem;
+  }
+
+  .view-all {
+    text-align: center;
+    display: block;
+    padding: 0.75rem;
+    color: var(--accent, #5b74c8);
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 500;
+    border: 1px solid var(--border, #dddaf0);
+    border-radius: 10px;
+    background: var(--surface, #fff);
+    transition: background 0.15s;
+  }
+
+  .view-all:hover {
+    background: var(--accent-bg, #eef1fb);
+  }
+
+  /* ── Mobile ── */
+  @media (max-width: 640px) {
+    .profile-banner {
+      margin: -1.25rem -1rem 0;
+      height: 150px;
+    }
+
+    .profile-card {
+      padding: 1rem;
+      margin-top: -1rem;
+    }
+
+    .avatar-wrap {
+      margin-top: -2.5rem;
+    }
+
+    .avatar-img,
+    .avatar-placeholder {
+      width: 60px;
+      height: 60px;
+    }
+
+    .avatar-placeholder {
+      font-size: 1.4rem;
+    }
+
+    .profile-stats {
+      width: 100%;
+      justify-content: flex-start;
+      margin-left: 0;
+    }
+  }
+</style>

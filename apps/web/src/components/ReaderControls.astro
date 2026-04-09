@@ -77,11 +77,11 @@
 
 <script>
   class ReaderControls {
-    baseSize = 1.1; // rem
-    currentSize = 1.1;
+    baseSize = 1.0; // rem
+    currentSize = 1.0;
     storageKey = 'blog-font-size';
-    minSize = 0.9;
-    maxSize = 1.4;
+    minSize = 0.85;
+    maxSize = 1.5;
 
     constructor() {
       this.loadSavedSize();
@@ -103,10 +103,10 @@
 
       switch (action) {
         case 'increase':
-          this.currentSize = Math.min(this.maxSize, this.currentSize + 0.05);
+          this.currentSize = Math.min(this.maxSize, this.currentSize + 0.1);
           break;
         case 'decrease':
-          this.currentSize = Math.max(this.minSize, this.currentSize - 0.05);
+          this.currentSize = Math.max(this.minSize, this.currentSize - 0.1);
           break;
         case 'reset':
           this.currentSize = this.baseSize;
@@ -118,12 +118,12 @@
     }
 
     applyFontSize() {
-      const article = document.querySelector<HTMLElement>('article');
-      if (!article) return;
+      const el = document.querySelector<HTMLElement>('.post-text');
+      if (!el) return;
 
-      article.style.fontSize = `${this.currentSize}rem`;
-      const lineHeight = 1.8 + (this.currentSize - 1.1) * 0.2;
-      article.style.lineHeight = `${lineHeight}`;
+      el.style.fontSize = `${this.currentSize}rem`;
+      const lineHeight = 1.8 + (this.currentSize - 1.0) * 0.3;
+      el.style.lineHeight = `${lineHeight}`;
     }
 
     saveFontSize() {
@@ -138,7 +138,7 @@
     }
   }
 
-  if (document.querySelector('article')) {
+  if (document.querySelector('.post-text')) {
     new ReaderControls();
   }
 </script>

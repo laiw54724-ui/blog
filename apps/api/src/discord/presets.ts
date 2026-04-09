@@ -24,6 +24,9 @@ export const CHINESE_TO_ENGLISH_COMMAND_MAP: Record<string, string> = {
   書摘: 'reading',
   我的文章: 'list',
   附圖: 'attach',
+  個人資料: 'profile',
+  設定頭貼: 'profile_avatar',
+  設定橫條: 'profile_banner',
 };
 
 export const COMMAND_PRESETS: Record<string, CommandPreset> = {

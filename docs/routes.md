@@ -1,210 +1,182 @@
 # 路由與模組切分
 
-## 1. Public Web Routes
+這份文件區分「已實作」與「規劃中」，避免規劃稿和現況混在一起。
+
+## 已實作 Web Routes
 
 ### `/`
 
 首頁
 
-- 最新動態 6 則
-- 最新文章 6 篇
-- 4 大分類入口
+- 最新動態
+- 最新文章
+- 分類入口
+
+### `/about`
+
+關於頁
 
 ### `/stream`
 
 動態河道
 
-- 依 `entry_type = post`
-- 依 `published_at DESC`
-- 支援 category filter
+- 以貼文為主
+- 文章會以系統通知形式穿插
 
 ### `/articles`
 
-文章河道
+文章列表
 
-- 依 `entry_type = article`
-- 支援 category tabs
+### `/c/[category]`
 
-### `/journal`
+分類列表頁
 
-日記索引
+- 支援 `journal`
+- 支援 `reading`
+- 支援 `travel`
+- 支援 `place`
 
-### `/reading`
+### `/post/[slug]`
 
-讀書索引
+貼文詳頁
 
-### `/travel`
+- 內文渲染
+- 圖片 gallery
+- 留言
+- clap / view metrics
 
-旅行索引
+### `/article/[slug]`
 
-### `/places`
+文章詳頁
 
-餐廳 / 咖啡 / 地點索引
+- markdown 渲染
+- cover image / 內文圖片
+- reader controls
 
-- 支援城市篩選
-- 支援評分篩選
-
-### `/map`
-
-地圖模式
-
-- 顯示有座標的 travel / place entries
-
-### `/tags/[slug]`
-
-tag 主題頁
-
-### `/entry/[slug]`
-
-單篇內容頁
-
-- 可渲染貼文或文章
-- 根據 category 套不同版型
+## 規劃中 Web Routes
 
 ### `/search`
 
 搜尋頁
 
-- 初期可用 D1 LIKE + tag 匹配
-- 後期可升級全文搜尋
+### `/tags/[slug]`
+
+tag 主題頁
+
+### `/map`
+
+地圖模式
 
 ### `/rss.xml`
 
-公開內容 RSS
+RSS feed
 
 ### `/sitemap.xml`
 
 站點地圖
 
----
+## 已實作 API Routes
 
-## 2. API Routes
+### 健康檢查
 
-### `POST /api/discord/interactions`
+- `GET /api/health`
 
-接收 Discord interactions。
+### Discord
 
-### `GET /api/health`
+- `POST /api/discord/interactions`
 
-健康檢查。
+### Entries
 
-### `POST /api/entries`
+- `GET /api/entries`
+- `GET /api/entries/metrics`
+- `GET /api/entries/slug/:slug`
+- `GET /api/entries/:id`
+- `GET /api/entries/:id/assets`
+- `GET /api/entries/:id/metrics`
+- `GET /api/entries/:id/comments`
+- `PUT /api/entries/:id`
+- `DELETE /api/entries/:id`
+- `DELETE /api/entries/:id/hard`
+- `POST /api/entries/:id/clap`
+- `POST /api/entries/:id/view`
+- `POST /api/entries/:id/comments`
+- `GET /api/entries/search`
 
-內部建立 entry。
+### Profile
 
-### `PUT /api/entries/:id`
+- `GET /api/profile`
+- `PUT /api/profile`
+- `POST /api/profile/avatar`
+- `POST /api/profile/banner`
 
-更新分類、標題、公開狀態。
+## 規劃中 API Routes
 
-### `DELETE /api/entries/:id`
+- `POST /api/entries`
+- `POST /api/entries/:id/promote`
+- `POST /api/entries/:id/re-run-ai`
+- `POST /api/assets/upload`
 
-將條目「典藏」(soft delete)：
-- 將 `status` 設為 `archived`
-- 將 `visibility` 設為 `private`
-- 條目仍保留於資料庫中，但不會出現在公開列表
-
-### `DELETE /api/entries/:id/hard`
-
-永久刪除條目 (hard delete)：
-- 會從 `entries` 中移除紀錄
-- 會同步刪除關聯的 `entry_tags` 和 `assets`
-
-### `POST /api/entries/:id/promote`
-
-把貼文升格成文章。
-
-### `POST /api/entries/:id/re-run-ai`
-
-重跑 AI。
-
-### `POST /api/assets/upload`
-
-簽名上傳圖片到 R2。
-
----
-
-## 3. 模組切分
-
-## `apps/api`
+## apps/api 模組現況
 
 ### `src/index.ts`
 
-Worker 入口。
+Worker 入口與 route 掛載
+
+### `src/routes/`
+
+- `entries.ts`
+- `comments.ts`
+- `profile.ts`
 
 ### `src/discord/`
 
-- verify signature
-- command handlers
-- message command handlers
-- component/button handlers
+- `verify.ts`
+- `interactions.ts`
+- `presets.ts`
+- `createEntry.ts`
+- `attachments.ts`
+- `handlers/create.ts`
+- `handlers/modal.ts`
+- `handlers/list.ts`
+- `handlers/component.ts`
 
-### `src/services/`
-
-- entry service
-- publish service
-- ai service
-- tag service
-- relation service
-
-### `src/db/`
-
-- D1 query layer
-- migrations
-
-### `src/lib/`
-
-- slugify
-- markdown utils
-- visibility rules
-
----
-
-## `apps/web`
+## apps/web 模組現況
 
 ### `src/pages/`
 
-- index.astro
-- stream.astro
-- articles.astro
-- journal.astro
-- reading.astro
-- travel.astro
-- places.astro
-- map.astro
-- tags/[slug].astro
-- entry/[slug].astro
+- `index.astro`
+- `about.astro`
+- `stream.astro`
+- `articles.astro`
+- `c/[category].astro`
+- `post/[slug].astro`
+- `article/[slug].astro`
 
 ### `src/components/`
 
-- PostCard.astro
-- ArticleCard.astro
-- EntryLayout.astro
-- PlaceMeta.astro
-- ReadingMeta.astro
-- TravelMeta.astro
-- MobileTabBar.astro
+- `EntryCard.astro`
+- `PostFeedCard.astro`
+- `SystemNoticeCard.astro`
+- `ReaderControls.astro`
+- `CommentBoard.astro`
+- `EntryEngagement.astro`
 
 ### `src/layouts/`
 
-- BaseLayout.astro
-- ArticleLayout.astro
-- StreamLayout.astro
+- `BaseLayout.astro`
 
 ### `src/lib/`
 
-- api client
-- date formatting
-- grouping helpers
+- `data.ts`
+- `presenters.ts`
+- `feed.ts`
+- `markdown.ts`
+- `response.ts`
 
----
+## 下一批值得做的頁面
 
-## 4. 第一批最值得先做的頁面
-
-1. `/`
-2. `/stream`
-3. `/articles`
-4. `/entry/[slug]`
-5. `POST /api/discord/interactions`
-6. `POST /api/entries/:id/promote`
-
-這 6 個做好，就能跑完整 MVP。
+1. `/search`
+2. `/tags/[slug]`
+3. `/map`
+4. RSS / sitemap
+5. promote article flow

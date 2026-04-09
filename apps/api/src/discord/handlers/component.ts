@@ -174,8 +174,6 @@ function bulkActionButtons(selectedIds: string[]) {
   };
 }
 
-const VALID_STATUSES = new Set(['published', 'draft', 'private', 'archived']);
-
 export async function handleComponent(db: any, customId: string, values?: string[]) {
   // Cancel — dismiss the current prompt
   if (customId === 'cancel') {

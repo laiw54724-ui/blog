@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro'
 import EntryCard from '../components/EntryCard.astro'
 import { getPosts, getArticles } from '../lib/data'
-import { buildEntryCardModels, CATEGORY_LABELS } from '../lib/presenters'
+import { buildEntryCardModels } from '../lib/presenters'
 import { applyPageCacheHeaders } from '../lib/response'
 
 const [allPosts, allArticles] = await Promise.all([

@@ -74,6 +74,34 @@ const commands = [
       },
     ],
   },
+  {
+    name: '個人資料',
+    description: '編輯個人名稱、簡介和連結',
+  },
+  {
+    name: '設定頭貼',
+    description: '上傳個人頭貼圖片',
+    options: [
+      {
+        name: 'image',
+        description: '頭貼圖片',
+        type: 11, // ATTACHMENT
+        required: true,
+      },
+    ],
+  },
+  {
+    name: '設定橫條',
+    description: '上傳個人主頁橫條圖片',
+    options: [
+      {
+        name: 'image',
+        description: '橫條圖片（建議寬：長 = 3:1）',
+        type: 11, // ATTACHMENT
+        required: true,
+      },
+    ],
+  },
 ];
 
 const endpoint = GUILD_ID

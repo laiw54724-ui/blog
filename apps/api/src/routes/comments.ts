@@ -12,6 +12,13 @@ interface Env {
   DB: D1Database;
 }
 
+interface CreateCommentBody {
+  author_name?: string;
+  body_markdown?: string;
+  website?: string;
+  form_started_at?: number;
+}
+
 const router = new Hono<{ Bindings: Env }>();
 
 // GET /api/entries/:id/comments
@@ -20,6 +27,7 @@ router.get('/', async (c) => {
   if (!db) return c.json({ error: 'Database not configured' }, 500);
 
   const entryId = c.req.param('id');
+  if (!entryId) return c.json({ error: 'Missing entry id' }, 400);
 
   try {
     const entry = await getEntryById(db, entryId);
@@ -39,17 +47,13 @@ router.post('/', async (c) => {
   if (!db) return c.json({ error: 'Database not configured' }, 500);
 
   const entryId = c.req.param('id');
+  if (!entryId) return c.json({ error: 'Missing entry id' }, 400);
 
   try {
     const entry = await getEntryById(db, entryId);
     if (!entry) return c.json({ error: 'Entry not found' }, 404);
 
-    const body = await c.req.json<{
-      author_name?: string;
-      body_markdown?: string;
-      website?: string;
-      form_started_at?: number;
-    }>();
+    const body = (await c.req.json()) as CreateCommentBody;
 
     // Honeypot: reject if website field is filled
     if (body.website) {

@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import app from '../index';
 import { createMockDb, createMockEnv, sampleEntries } from './helpers';
+
+interface MockQuery {
+  sql: string;
+}
 
 /**
  * Integration tests for the API layer
@@ -10,6 +14,12 @@ import { createMockDb, createMockEnv, sampleEntries } from './helpers';
 // Helper to make requests with mocked env bindings
 function makeRequest(path: string, env: any, options: RequestInit = {}) {
   return app.request(path, options, env);
+}
+
+function findUpdateQuery(queries: MockQuery[]) {
+  const query = queries.find((item) => item.sql.startsWith('UPDATE entries SET'));
+  expect(query).toBeDefined();
+  return query!;
 }
 
 describe('GET /api/health', () => {
@@ -119,6 +129,81 @@ describe('GET /api/entries/slug/:slug', () => {
   });
 });
 
+describe('GET /api/entries/search', () => {
+  it('returns search results matching query', async () => {
+    const db = createMockDb({ allResults: [sampleEntries[0]] });
+    const env = createMockEnv(db);
+    const res = await makeRequest('/api/entries/search?q=hello', env);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data).toEqual([sampleEntries[0]]);
+    expect(body.count).toBe(1);
+  });
+
+  it('returns empty array when query is blank', async () => {
+    const db = createMockDb({ allResults: [] });
+    const env = createMockEnv(db);
+    const res = await makeRequest('/api/entries/search', env);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data).toEqual([]);
+    expect(body.count).toBe(0);
+  });
+
+  it('returns 400 when query exceeds 100 chars', async () => {
+    const db = createMockDb({ allResults: [] });
+    const env = createMockEnv(db);
+    const longQ = 'a'.repeat(101);
+    const res = await makeRequest(`/api/entries/search?q=${longQ}`, env);
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as any;
+    expect(body.error).toContain('too long');
+  });
+});
+
+describe('GET /api/entries/assets', () => {
+  it('returns assets map keyed by entry_id', async () => {
+    const assetRows = [
+      { id: 'asset_1', entry_id: 'entry_001', kind: 'cover', storage_key: 'img/a.jpg', mime_type: 'image/jpeg', sort_order: 0 },
+      { id: 'asset_2', entry_id: 'entry_002', kind: 'image', storage_key: 'img/b.jpg', mime_type: 'image/jpeg', sort_order: 0 },
+    ];
+    const db = createMockDb({ allResults: assetRows });
+    const env = createMockEnv(db);
+    const res = await makeRequest('/api/entries/assets?ids=entry_001,entry_002', env);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data.entry_001).toBeDefined();
+    expect(body.data.entry_001[0].id).toBe('asset_1');
+    expect(body.data.entry_002).toBeDefined();
+  });
+
+  it('returns empty object when no ids provided', async () => {
+    const db = createMockDb({ allResults: [] });
+    const env = createMockEnv(db);
+    const res = await makeRequest('/api/entries/assets', env);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data).toEqual({});
+  });
+
+  it('limits to 50 ids max', async () => {
+    const db = createMockDb({ allResults: [] });
+    const env = createMockEnv(db);
+    const ids = Array.from({ length: 60 }, (_, i) => `entry_${i}`).join(',');
+    const res = await makeRequest(`/api/entries/assets?ids=${ids}`, env);
+
+    expect(res.status).toBe(200);
+    const sql = db._queries[0]?.sql || '';
+    const placeholderCount = (sql.match(/\?/g) || []).length;
+    expect(placeholderCount).toBeLessThanOrEqual(50);
+  });
+});
+
 describe('GET /api/entries/:id', () => {
   it('returns entry by ID', async () => {
     const entry = sampleEntries[0];
@@ -188,8 +273,7 @@ describe('PUT /api/entries/:id', () => {
     expect(body.data.title).toBe('Updated Title');
     expect(body.data.content_markdown).toBe('Updated content');
 
-    const updateSql = db._queries.find((query: any) => query.sql.startsWith('UPDATE entries SET'));
-    expect(updateSql).toBeDefined();
+    const updateSql = findUpdateQuery(db._queries);
     expect(updateSql.sql).toContain('title = ?');
     expect(updateSql.sql).toContain('content_markdown = ?');
   });
@@ -267,8 +351,7 @@ describe('PUT /api/entries/:id', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.data).toEqual(sampleEntries[0]);
-    const updateSql = db._queries.find((query: any) => query.sql.startsWith('UPDATE entries SET'));
-    expect(updateSql).toBeDefined();
+    const updateSql = findUpdateQuery(db._queries);
     expect(updateSql.sql).toContain('title = ?');
     expect(updateSql.sql).toContain('visibility = ?');
   });
@@ -345,6 +428,44 @@ describe('DELETE /api/entries/:id', () => {
     expect(res.status).toBe(401);
     const body = (await res.json()) as any;
     expect(body.error).toBe('Unauthorized');
+  });
+});
+
+describe('POST /api/entries/:id/clap', () => {
+  it('increments clap count', async () => {
+    const db = createMockDb({ firstResults: [null, { clap_count: 2 }] });
+    const env = createMockEnv(db);
+    const res = await makeRequest('/api/entries/entry_001/clap', env, {
+      method: 'POST',
+      headers: { 'CF-Connecting-IP': '1.2.3.4' },
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.clap_count).toBe(2);
+  });
+
+  it('returns 429 when same IP claps the same entry within 10 seconds', async () => {
+    const db = createMockDb({
+      firstResults: [
+        null,
+        { clap_count: 1 },
+        { last_comment_at: new Date(Date.now() - 2000).toISOString() },
+      ],
+    });
+    const env = createMockEnv(db);
+
+    const res1 = await makeRequest('/api/entries/entry_001/clap', env, {
+      method: 'POST',
+      headers: { 'CF-Connecting-IP': '1.2.3.5' },
+    });
+    expect(res1.status).toBe(200);
+
+    const res2 = await makeRequest('/api/entries/entry_001/clap', env, {
+      method: 'POST',
+      headers: { 'CF-Connecting-IP': '1.2.3.5' },
+    });
+    expect(res2.status).toBe(429);
   });
 });
 

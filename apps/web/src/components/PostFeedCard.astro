@@ -1,0 +1,265 @@
+---
+interface Props {
+  href: string
+  title: string
+  excerpt?: string
+  date?: string
+  displayName?: string
+  avatarUrl?: string | null
+  categoryLabel?: string
+  coverUrl?: string
+  coverAlt?: string
+  stats?: { comment_count: number; clap_count: number; view_count: number }
+}
+
+const {
+  href,
+  title,
+  excerpt = '',
+  date = '',
+  displayName = 'life',
+  avatarUrl = null,
+  categoryLabel = '',
+  coverUrl = '',
+  coverAlt = '',
+  stats,
+} = Astro.props
+
+const hasExcerpt = Boolean(excerpt && excerpt !== title)
+const hasCover = Boolean(coverUrl)
+---
+
+<article class="feed-card">
+  <!-- Header: avatar + name + date -->
+  <header class="feed-header">
+    {avatarUrl ? (
+      <img class="feed-avatar feed-avatar-image" src={avatarUrl} alt={displayName} />
+    ) : (
+      <div class="feed-avatar" aria-hidden="true">{displayName[0]?.toUpperCase() || 'L'}</div>
+    )}
+    <div class="feed-info">
+      <span class="feed-name">{displayName}<span class="feed-dot">·</span></span>
+      {categoryLabel && <span class="feed-category">{categoryLabel}</span>}
+      <time class="feed-time">{date}</time>
+    </div>
+  </header>
+
+  <!-- Body: text -->
+  <a href={href} class="feed-body">
+    {title && <p class="feed-title">{title}</p>}
+    {hasExcerpt && <p class="feed-excerpt">{excerpt}</p>}
+  </a>
+
+  <!-- Cover image -->
+  {hasCover && (
+    <a href={href} class="feed-image-wrap">
+      <img class="feed-cover" src={coverUrl} alt={coverAlt || ''} loading="lazy" />
+    </a>
+  )}
+
+  <!-- Footer: stats + read more -->
+  <footer class="feed-footer">
+    {stats !== undefined ? (
+      <div class="feed-stats">
+        <span class="fstat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          {stats.comment_count}
+        </span>
+        <span class="fstat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          {stats.clap_count}
+        </span>
+        <span class="fstat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          {stats.view_count}
+        </span>
+      </div>
+    ) : <span />}
+    <a href={href} class="feed-read-more">閱讀全文 →</a>
+  </footer>
+</article>
+
+<style>
+  .feed-card {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #dddaf0);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: box-shadow 0.15s, border-color 0.15s;
+  }
+
+  .feed-card:hover {
+    box-shadow: 0 4px 20px rgba(91, 116, 200, 0.1);
+    border-color: #c8ccf0;
+  }
+
+  /* ── Header ── */
+  .feed-header {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.9rem 1.1rem 0.6rem;
+  }
+
+  .feed-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--accent, #5b74c8);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .feed-avatar-image {
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.75);
+  }
+
+  .feed-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.55rem;
+  }
+
+  .feed-name {
+    font-weight: 700;
+    color: var(--text, #26253a);
+    font-size: 0.9rem;
+  }
+
+  .feed-dot {
+    color: var(--accent, #5b74c8);
+  }
+
+  .feed-category {
+    font-size: 0.78rem;
+    color: var(--accent, #5b74c8);
+    background: var(--accent-bg, #eef1fb);
+    padding: 0.1rem 0.5rem;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .feed-time {
+    color: var(--text-muted, #8a88a8);
+    font-size: 0.8rem;
+  }
+
+  /* ── Body ── */
+  .feed-body {
+    display: block;
+    padding: 0 1.1rem 0.9rem;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .feed-body:hover .feed-title {
+    color: var(--accent, #5b74c8);
+  }
+
+  .feed-title {
+    font-size: 0.98rem;
+    font-weight: 600;
+    color: var(--text, #26253a);
+    margin: 0 0 0.45rem;
+    line-height: 1.5;
+    transition: color 0.15s;
+  }
+
+  .feed-excerpt {
+    font-size: 0.88rem;
+    color: var(--text-muted, #8a88a8);
+    margin: 0;
+    line-height: 1.65;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+
+  /* ── Cover image ── */
+  .feed-image-wrap {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    border-top: 1px solid var(--border, #dddaf0);
+  }
+
+  .feed-cover {
+    width: 100%;
+    max-height: 300px;
+    object-fit: cover;
+    display: block;
+    transition: opacity 0.2s, transform 0.3s;
+  }
+
+  .feed-image-wrap:hover .feed-cover {
+    opacity: 0.93;
+    transform: scale(1.01);
+  }
+
+  /* ── Footer ── */
+  .feed-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 1.1rem;
+    border-top: 1px solid var(--border, #dddaf0);
+  }
+
+  .feed-stats {
+    display: flex;
+    gap: 0.9rem;
+    font-size: 0.8rem;
+    color: var(--text-muted, #8a88a8);
+  }
+
+  .fstat {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .fstat svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+  }
+
+  .feed-read-more {
+    font-size: 0.82rem;
+    color: var(--accent, #5b74c8);
+    text-decoration: none;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .feed-read-more:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 640px) {
+    .feed-header {
+      padding: 0.8rem 1rem 0.5rem;
+    }
+
+    .feed-body {
+      padding: 0 1rem 0.8rem;
+    }
+
+    .feed-footer {
+      padding: 0.5rem 1rem;
+    }
+
+    .feed-cover {
+      max-height: 220px;
+    }
+  }
+</style>

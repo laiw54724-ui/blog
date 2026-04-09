@@ -24,8 +24,16 @@ const TYPE_LABEL: Record<string, string> = {
   article: '文章',
 };
 
-async function buildListPayload(db: any): Promise<object> {
-  const entries = (await getRecentEntries(db, 5)) as any[];
+interface RecentEntry {
+  id: string;
+  title: string | null;
+  entry_type: string;
+  status: string;
+  created_at: string;
+}
+
+async function buildListPayload(db: unknown): Promise<object> {
+  const entries = (await getRecentEntries(db as never, 5)) as unknown as RecentEntry[];
 
   if (entries.length === 0) {
     return { content: '還沒有任何文章。試試 `/貼文` 來新增第一篇！', flags: 64 };
@@ -33,12 +41,12 @@ async function buildListPayload(db: any): Promise<object> {
 
   // Embed: list all entries
   const fields = entries.map((e, i) => ({
-    name: `${i + 1}. ${e.title || '（無標題）'}`,
+    name: `${i + 1}. ${(e.title || '（無標題）').replace(/^#+\s+/, '').slice(0, 250)}`,
     value: [
       `類型：${TYPE_LABEL[e.entry_type] || e.entry_type}`,
       `狀態：${STATUS_LABEL[e.status] || e.status}`,
       `建立：${new Date(e.created_at).toLocaleDateString('zh-TW')}`,
-    ].join('　'),
+    ].join(' '),
     inline: false,
   }));
 
@@ -61,10 +69,10 @@ async function buildListPayload(db: any): Promise<object> {
         custom_id: 'bulk_select',
         placeholder: '選擇文章進行批次操作（最多 3 篇）',
         min_values: 1,
-        max_values: Math.min(entries.length, 3),
+        max_values: entries.length,
         options: entries.map((e, i) => ({
           label: `${i + 1}. ${(e.title || '（無標題）').slice(0, 50)}`,
-          description: `${STATUS_LABEL[e.status] || e.status}　${TYPE_LABEL[e.entry_type] || e.entry_type}`,
+          description: `${STATUS_LABEL[e.status] || e.status} ${TYPE_LABEL[e.entry_type] || e.entry_type}`,
           value: e.id,
         })),
       },
@@ -101,7 +109,7 @@ async function patchDeferredMessage(
   discordToken: string,
   payload: object
 ): Promise<void> {
-  await fetch(
+  const res = await fetch(
     `https://discord.com/api/v10/webhooks/${appId}/${token}/messages/@original`,
     {
       method: 'PATCH',
@@ -112,10 +120,14 @@ async function patchDeferredMessage(
       body: JSON.stringify(payload),
     }
   );
+  if (!res.ok) {
+    const body = await res.text().catch(() => '(unreadable)');
+    console.error(`Discord PATCH failed ${res.status}:`, body);
+  }
 }
 
 export async function sendListFollowup(
-  db: any,
+  db: unknown,
   appId: string,
   token: string,
   discordToken: string
@@ -125,10 +137,8 @@ export async function sendListFollowup(
     await patchDeferredMessage(appId, token, discordToken, payload);
   } catch (error) {
     console.error('List follow-up error:', error);
-    try {
-      await patchDeferredMessage(appId, token, discordToken, {
-        content: '❌ 載入文章列表失敗，請稍後再試',
-      });
-    } catch {}
+    await patchDeferredMessage(appId, token, discordToken, {
+      content: '❌ 載入文章列表失敗，請稍後再試',
+    }).catch((error) => console.error('Fallback patch failed:', error));
   }
 }

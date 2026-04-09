@@ -4,6 +4,7 @@
  */
 
 import type { CommandPreset } from './presets';
+import type { D1Database } from '@cloudflare/workers-types';
 import { generateId, slugify, extractHashtags, generateExcerpt } from '@personal-blog/shared/utils';
 import { createEntry, addTagsToEntry } from '@personal-blog/shared/db';
 
@@ -21,6 +22,18 @@ export interface CreateEntryOutput {
   error?: string;
   message: string;
 }
+
+interface PreparedStatementLike {
+  bind(...args: unknown[]): PreparedStatementLike;
+  first(): Promise<{ id?: string } | null>;
+  run(): Promise<unknown>;
+}
+
+interface DbLike {
+  prepare(sql: string): PreparedStatementLike;
+}
+
+type DatabaseLike = D1Database | DbLike;
 
 /**
  * Extract title from content (first line or auto-generate)
@@ -47,7 +60,7 @@ function extractTitle(content: string, fallback?: string): string {
   }).format(new Date());
 }
 
-async function ensureUniqueSlug(db: any, baseSlug: string): Promise<string> {
+async function ensureUniqueSlug(db: DatabaseLike, baseSlug: string): Promise<string> {
   let slug = baseSlug;
   let i = 2;
   while (true) {
@@ -64,11 +77,11 @@ async function ensureUniqueSlug(db: any, baseSlug: string): Promise<string> {
 /**
  * Find or create a tag by name, return its ID
  */
-async function findOrCreateTag(db: any, tagName: string): Promise<string> {
+async function findOrCreateTag(db: DatabaseLike, tagName: string): Promise<string> {
   const tagSlug = slugify(tagName);
   const existing = await db.prepare('SELECT id FROM tags WHERE slug = ?').bind(tagSlug).first();
 
-  if (existing) {
+  if (existing && typeof existing.id === 'string') {
     return existing.id;
   }
 
@@ -86,7 +99,7 @@ async function findOrCreateTag(db: any, tagName: string): Promise<string> {
  * Unified logic for all command types
  */
 export async function createEntryFromCommand(
-  db: any,
+  db: DatabaseLike,
   input: CreateEntryInput
 ): Promise<CreateEntryOutput> {
   try {
@@ -109,7 +122,7 @@ export async function createEntryFromCommand(
 
     const finalCategory = selectedCategory || preset.category;
 
-    await createEntry(db, {
+    await createEntry(db as D1Database, {
       id: entryId,
       slug,
       entry_type: preset.entry_type,
@@ -128,7 +141,7 @@ export async function createEntryFromCommand(
         const tagId = await findOrCreateTag(db, tagName);
         tagIds.push(tagId);
       }
-      await addTagsToEntry(db, entryId, tagIds);
+      await addTagsToEntry(db as D1Database, entryId, tagIds);
     }
 
     return {
