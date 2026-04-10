@@ -1,0 +1,544 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getReadingEntries } from '../lib/data';
+import {
+  GENRE_LABELS,
+  MEDIUM_LABELS,
+  READ_STATUS_LABELS,
+  WORK_STATUS_LABELS,
+  formatScore,
+  formatReadAt,
+} from '../lib/reading';
+
+const rawEntries = await getReadingEntries();
+
+// Parse tags from JSON strings
+const allItems = rawEntries.map((e) => ({
+  ...e,
+  tagsArr: (() => { try { return JSON.parse(e.tags) as string[]; } catch { return []; } })(),
+}));
+
+const totalCount = allItems.length;
+const completedCount = allItems.filter((e) => e.read_status === 'completed').length;
+const ongoingCount = allItems.filter((e) => e.read_status === 'ongoing').length;
+const scored = allItems.filter((e) => e.score != null);
+const avgScore =
+  scored.length > 0
+    ? (scored.reduce((s, e) => s + (e.score ?? 0), 0) / scored.length).toFixed(1)
+    : null;
+
+// Serialize for client-side filtering
+const jsonData = JSON.stringify(
+  allItems.map((e) => ({
+    id: e.id,
+    slug: e.slug,
+    title: e.title,
+    author: e.author ?? '',
+    genre: e.genre,
+    medium: e.medium,
+    readStatus: e.read_status,
+    workStatus: e.work_status,
+    score: e.score ?? null,
+    readAt: e.read_at ?? '',
+    shortReview: e.short_review ?? '',
+    tags: e.tagsArr,
+    hasDetail: e.has_detail === 1,
+  }))
+);
+---
+
+<BaseLayout title="閱讀 | Double River" description="記下讀過的作品，不是完整書評，是帶情緒的閱讀地圖。">
+  <div class="reading-shell">
+    <header class="reading-header">
+      <p class="reading-kicker">reading archive</p>
+      <h1>閱讀</h1>
+      <p class="reading-desc">記下讀過、喜歡過、卡住過的作品。不是完整書評，更像帶情緒的閱讀地圖。</p>
+    </header>
+
+    <div class="reading-stats">
+      <div class="stat-item">
+        <span class="stat-num">{totalCount}</span>
+        <span class="stat-label">已記錄</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">{completedCount}</span>
+        <span class="stat-label">讀完</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">{ongoingCount}</span>
+        <span class="stat-label">追更中</span>
+      </div>
+      {avgScore && (
+        <div class="stat-item">
+          <span class="stat-num">{avgScore}</span>
+          <span class="stat-label">平均評分</span>
+        </div>
+      )}
+    </div>
+
+    <div class="reading-toolbar">
+      <div class="toolbar-search">
+        <input
+          id="readingSearch"
+          type="search"
+          placeholder="搜尋書名、作者、短評…"
+          autocomplete="off"
+          aria-label="搜尋閱讀清單"
+        />
+      </div>
+      <div class="toolbar-filters">
+        <select id="filterGenre" aria-label="篩選分類">
+          <option value="">全部分類</option>
+          <option value="bl">BL</option>
+          <option value="bg">BG</option>
+          <option value="gl">GL</option>
+          <option value="gen">無CP</option>
+        </select>
+        <select id="filterMedium" aria-label="篩選媒介">
+          <option value="">全部媒介</option>
+          <option value="novel">小說</option>
+          <option value="comic">漫畫</option>
+          <option value="manhwa">韓漫</option>
+          <option value="manga">日漫</option>
+          <option value="webtoon">條漫</option>
+          <option value="drama">韓劇</option>
+        </select>
+        <select id="filterStatus" aria-label="篩選閱讀狀態">
+          <option value="">全部狀態</option>
+          <option value="completed">讀完</option>
+          <option value="ongoing">追更中</option>
+          <option value="dropped">棄文</option>
+        </select>
+        <select id="sortBy" aria-label="排序方式">
+          <option value="readAt">最近閱讀</option>
+          <option value="score">評分高低</option>
+          <option value="title">書名</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="reading-count" id="readingCount" aria-live="polite">
+      共 {totalCount} 筆
+    </div>
+
+    {allItems.length === 0 ? (
+      <p class="reading-empty">
+        閱讀清單還是空的，先去 Discord 用 <code>/讀了</code> 記一本。
+      </p>
+    ) : (
+      <>
+        <div class="reading-table-wrap">
+          <table class="reading-table" id="readingTable">
+            <thead>
+              <tr>
+                <th class="col-title">書名</th>
+                <th class="col-author">作者</th>
+                <th class="col-genre">分類</th>
+                <th class="col-medium">媒介</th>
+                <th class="col-status">狀態</th>
+                <th class="col-score">評分</th>
+                <th class="col-date">閱讀日期</th>
+                <th class="col-review">短評</th>
+              </tr>
+            </thead>
+            <tbody id="readingBody">
+              {allItems.map((item) => (
+                <tr
+                  data-genre={item.genre}
+                  data-medium={item.medium}
+                  data-read-status={item.read_status}
+                  data-score={item.score ?? ''}
+                  data-read-at={item.read_at ?? ''}
+                  data-search-text={[item.title, item.author ?? '', item.short_review ?? '', item.tagsArr.join(' ')].join(' ').toLowerCase()}
+                >
+                  <td class="col-title">
+                    {item.has_detail === 1 ? (
+                      <a href={`/reading/${item.slug}`} class="entry-title-link">{item.title}</a>
+                    ) : (
+                      <span class="entry-title-text">{item.title}</span>
+                    )}
+                  </td>
+                  <td class="col-author">{item.author ?? '—'}</td>
+                  <td class="col-genre">
+                    <span class={`badge badge-genre badge-genre-${item.genre}`}>
+                      {GENRE_LABELS[item.genre] ?? item.genre}
+                    </span>
+                  </td>
+                  <td class="col-medium">
+                    <span class="badge badge-medium">{MEDIUM_LABELS[item.medium] ?? item.medium}</span>
+                  </td>
+                  <td class="col-status">
+                    <span class={`badge badge-status badge-status-${item.read_status}`}>
+                      {READ_STATUS_LABELS[item.read_status] ?? item.read_status}
+                    </span>
+                    {item.work_status !== 'unknown' && (
+                      <span class="badge badge-work-status">
+                        {WORK_STATUS_LABELS[item.work_status]}
+                      </span>
+                    )}
+                  </td>
+                  <td class="col-score">
+                    <span class={`score-val ${item.score != null ? (item.score >= 9 ? 'score-high' : item.score >= 7 ? 'score-mid' : 'score-low') : 'score-none'}`}>
+                      {formatScore(item.score ?? undefined)}
+                    </span>
+                  </td>
+                  <td class="col-date">{formatReadAt(item.read_at ?? undefined)}</td>
+                  <td class="col-review">{item.short_review ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <p class="reading-empty" id="readingEmpty" hidden>
+          這個條件目前沒有結果。可能是還沒補進來，也可能是我根本忘了記。
+        </p>
+      </>
+    )}
+  </div>
+</BaseLayout>
+
+<script define:vars={{ jsonData }}>
+  const ALL_ITEMS = JSON.parse(jsonData);
+
+  if (ALL_ITEMS.length > 0) {
+    const searchInput = document.getElementById('readingSearch');
+    const filterGenre = document.getElementById('filterGenre');
+    const filterMedium = document.getElementById('filterMedium');
+    const filterStatus = document.getElementById('filterStatus');
+    const sortBy = document.getElementById('sortBy');
+    const tbody = document.getElementById('readingBody');
+    const countEl = document.getElementById('readingCount');
+    const emptyEl = document.getElementById('readingEmpty');
+
+    if (
+      searchInput instanceof HTMLInputElement &&
+      filterGenre instanceof HTMLSelectElement &&
+      filterMedium instanceof HTMLSelectElement &&
+      filterStatus instanceof HTMLSelectElement &&
+      sortBy instanceof HTMLSelectElement &&
+      tbody instanceof HTMLTableSectionElement
+    ) {
+      const GENRE_LABELS = { bl: 'BL', bg: 'BG', gl: 'GL', gen: '無CP' };
+      const MEDIUM_LABELS = { novel: '小說', comic: '漫畫', manhwa: '韓漫', manga: '日漫', webtoon: '條漫', drama: '韓劇' };
+      const READ_STATUS_LABELS = { completed: '讀完', ongoing: '追更中', dropped: '棄文' };
+      const WORK_STATUS_LABELS = { finished: '完結', serializing: '連載中', unknown: '未知' };
+
+      function getFilters() {
+        return {
+          q: searchInput.value.trim().toLowerCase(),
+          genre: filterGenre.value,
+          medium: filterMedium.value,
+          status: filterStatus.value,
+          sort: sortBy.value,
+        };
+      }
+
+      function matchesFilters(item, filters) {
+        if (filters.genre && item.genre !== filters.genre) return false;
+        if (filters.medium && item.medium !== filters.medium) return false;
+        if (filters.status && item.readStatus !== filters.status) return false;
+        if (filters.q) {
+          const hay = [item.title, item.author, item.shortReview, item.tags.join(' ')].join(' ').toLowerCase();
+          if (!hay.includes(filters.q)) return false;
+        }
+        return true;
+      }
+
+      function sortItems(items, sort) {
+        return [...items].sort((a, b) => {
+          if (sort === 'score') return (b.score ?? -1) - (a.score ?? -1);
+          if (sort === 'title') return a.title.localeCompare(b.title, 'zh-TW');
+          if (!a.readAt && !b.readAt) return 0;
+          if (!a.readAt) return 1;
+          if (!b.readAt) return -1;
+          return b.readAt.localeCompare(a.readAt);
+        });
+      }
+
+      function scoreClass(score) {
+        if (score === null) return 'score-none';
+        if (score >= 9) return 'score-high';
+        if (score >= 7) return 'score-mid';
+        return 'score-low';
+      }
+
+      function renderRows(items) {
+        tbody.innerHTML = '';
+        items.forEach((item) => {
+          const tr = document.createElement('tr');
+          const titleCell = item.hasDetail
+            ? `<a href="/reading/${item.slug}" class="entry-title-link">${item.title}</a>`
+            : `<span class="entry-title-text">${item.title}</span>`;
+          const workBadge = item.workStatus !== 'unknown'
+            ? `<span class="badge badge-work-status">${WORK_STATUS_LABELS[item.workStatus] ?? item.workStatus}</span>`
+            : '';
+          const scoreStr = item.score !== null ? Number(item.score).toFixed(1) : '—';
+          const dateStr = item.readAt ? item.readAt.slice(0, 7) : '—';
+          tr.innerHTML = `
+            <td class="col-title">${titleCell}</td>
+            <td class="col-author">${item.author || '—'}</td>
+            <td class="col-genre"><span class="badge badge-genre badge-genre-${item.genre}">${GENRE_LABELS[item.genre] ?? item.genre}</span></td>
+            <td class="col-medium"><span class="badge badge-medium">${MEDIUM_LABELS[item.medium] ?? item.medium}</span></td>
+            <td class="col-status"><span class="badge badge-status badge-status-${item.readStatus}">${READ_STATUS_LABELS[item.readStatus] ?? item.readStatus}</span>${workBadge}</td>
+            <td class="col-score"><span class="${scoreClass(item.score)}">${scoreStr}</span></td>
+            <td class="col-date">${dateStr}</td>
+            <td class="col-review">${item.shortReview || ''}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      function applyFilters() {
+        const filters = getFilters();
+        const matched = ALL_ITEMS.filter((item) => matchesFilters(item, filters));
+        const sorted = sortItems(matched, filters.sort);
+        renderRows(sorted);
+        if (countEl) countEl.textContent = `共 ${sorted.length} 筆`;
+        if (emptyEl) emptyEl.hidden = sorted.length > 0;
+      }
+
+      searchInput.addEventListener('input', applyFilters);
+      filterGenre.addEventListener('change', applyFilters);
+      filterMedium.addEventListener('change', applyFilters);
+      filterStatus.addEventListener('change', applyFilters);
+      sortBy.addEventListener('change', applyFilters);
+    }
+  }
+</script>
+
+<style>
+  .reading-shell {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  .reading-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .reading-kicker {
+    margin: 0 0 0.45rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  .reading-header h1 {
+    font-family: var(--serif);
+    font-size: clamp(2.9rem, 6vw, 3.35rem);
+    font-weight: 700;
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    margin: 0 0 0.65rem;
+    color: #121218;
+  }
+
+  .reading-desc {
+    max-width: 44rem;
+    color: #6f6a86;
+    font-size: 1rem;
+    line-height: 1.75;
+    margin: 0;
+  }
+
+  .reading-stats {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.65rem 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: transparent;
+    min-width: 72px;
+  }
+
+  .stat-num {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1.1;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+
+  .reading-toolbar {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 0.6rem;
+  }
+
+  .toolbar-search { flex: 1; min-width: 180px; }
+
+  .toolbar-search input {
+    width: 100%;
+    padding: 0.52rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.9rem;
+    color: var(--text);
+    background: var(--surface);
+    outline: none;
+  }
+
+  .toolbar-search input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+
+  .toolbar-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+  .toolbar-filters select {
+    padding: 0.48rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.87rem;
+    color: var(--text);
+    background: var(--surface);
+    cursor: pointer;
+    outline: none;
+  }
+
+  .toolbar-filters select:focus { border-color: var(--accent); }
+
+  .reading-count {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .reading-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #e8e4f4;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.85);
+  }
+
+  .reading-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  .reading-table thead {
+    background: #f5f3fb;
+    border-bottom: 1px solid #e8e4f4;
+  }
+
+  .reading-table th {
+    padding: 0.6rem 0.9rem;
+    text-align: left;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #7a758c;
+    white-space: nowrap;
+  }
+
+  .reading-table td {
+    padding: 0.68rem 0.9rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f0edf9;
+    color: #2b2d43;
+  }
+
+  .reading-table tbody tr:last-child td { border-bottom: none; }
+  .reading-table tbody tr:hover td { background: #faf9fe; }
+
+  .col-title  { min-width: 130px; max-width: 210px; }
+  .col-author { min-width: 72px; color: #6e6a84; }
+  .col-genre, .col-medium, .col-status { white-space: nowrap; }
+  .col-score  { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .col-date   { white-space: nowrap; font-variant-numeric: tabular-nums; color: #9892ae; font-size: 0.83rem; }
+  .col-review { color: #5e5a72; font-size: 0.85rem; }
+
+  .entry-title-link {
+    color: #2b2d43;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .entry-title-link:hover { color: var(--reading-accent, #a85f43); text-decoration: underline; }
+  .entry-title-text { font-weight: 600; color: #4a4860; }
+
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .badge + .badge { margin-left: 0.3rem; }
+
+  .badge-genre-bl  { background: #ede9ff; color: #5a4ea0; }
+  .badge-genre-bg  { background: #e6f0ff; color: #3a5fa0; }
+  .badge-genre-gl  { background: #fce9f4; color: #a04079; }
+  .badge-genre-gen { background: #f0f0f0; color: #666; }
+  .badge-medium { background: #f2f0fb; color: #6259a0; }
+  .badge-status-completed { background: #e6f9ef; color: #2d7a54; }
+  .badge-status-ongoing   { background: #fff4e0; color: #8a5a00; }
+  .badge-status-dropped   { background: #fde9e9; color: #8a3030; }
+  .badge-work-status { background: #f5f5f5; color: #888; font-size: 0.7rem; }
+
+  .score-high { color: #2d7a54; font-weight: 700; }
+  .score-mid  { color: #5a6aba; font-weight: 600; }
+  .score-low  { color: #8a8098; }
+  .score-none { color: #c0bcd4; }
+
+  .reading-empty {
+    text-align: center;
+    color: #9892ae;
+    padding: 3rem;
+    font-size: 0.95rem;
+    line-height: 1.8;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .reading-header { border-color: #3a3650; }
+    .stat-item { background: #211f35; border-color: #3a3650; }
+    .stat-label { color: #7a7494; }
+    .toolbar-search input,
+    .toolbar-filters select { background: #1e1c30; border-color: #3a3650; color: #d0ceea; }
+    .reading-table-wrap { background: #1a1829; border-color: #2e2b48; }
+    .reading-table thead { background: #1e1c30; }
+    .reading-table th { color: #6a6480; }
+    .reading-table td { border-color: #252238; color: #d0ceea; }
+    .reading-table tbody tr:hover td { background: #1e1c30; }
+    .col-author { color: #8a8498; }
+    .entry-title-link { color: #d0ceea; }
+    .entry-title-text { color: #a8a4c4; }
+  }
+
+  @media (max-width: 720px) {
+    .reading-shell { padding: 1.25rem 1rem 3rem; }
+    .reading-stats { gap: 0.6rem; }
+    .stat-item { padding: 0.55rem 0.9rem; min-width: 64px; }
+    .stat-num { font-size: 1.3rem; }
+    .toolbar-search { min-width: 100%; }
+    .col-review, .col-date { display: none; }
+  }
+
+  @media (max-width: 480px) {
+    .col-author { display: none; }
+  }
+</style>
