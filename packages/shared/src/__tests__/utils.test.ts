@@ -7,6 +7,13 @@ import {
   formatDate,
   defaultVisibility,
 } from '../utils';
+import {
+  normalizeTagInput,
+  groupStructuredTags,
+  classifyTags,
+  isStructuredTagSlug,
+  STRUCTURED_TAG_GROUP_ORDER,
+} from '../tags';
 
 describe('slugify', () => {
   it('converts basic text to slug', () => {
@@ -83,6 +90,10 @@ describe('extractHashtags', () => {
   it('handles hashtags with underscores', () => {
     expect(extractHashtags('#my_tag')).toEqual(['my_tag']);
   });
+
+  it('supports structured hashtags with colons', () => {
+    expect(extractHashtags('#genre:bl #tone:healing')).toEqual(['genre:bl', 'tone:healing']);
+  });
 });
 
 describe('generateExcerpt', () => {
@@ -137,5 +148,75 @@ describe('defaultVisibility', () => {
 
   it('returns public for place', () => {
     expect(defaultVisibility('place')).toBe('public');
+  });
+});
+
+describe('normalizeTagInput', () => {
+  it('maps known aliases into structured tags', () => {
+    expect(normalizeTagInput('BL')).toEqual({
+      slug: 'genre:bl',
+      label: 'BL',
+      group: 'genre',
+      isStructured: true,
+    });
+  });
+
+  it('keeps explicit structured tags', () => {
+    expect(normalizeTagInput('tone:healing')).toEqual({
+      slug: 'tone:healing',
+      label: '療癒',
+      group: 'tone',
+      isStructured: true,
+    });
+  });
+
+  it('falls back to plain slugified tags when no mapping exists', () => {
+    expect(normalizeTagInput('GKR-Proof')).toEqual({
+      slug: 'gkr-proof',
+      label: 'GKR-Proof',
+      isStructured: false,
+    });
+  });
+});
+
+describe('groupStructuredTags', () => {
+  it('groups normalized tags by group key', () => {
+    expect(groupStructuredTags(['BL', '校園', '證明'])).toEqual({
+      genre: [{ slug: 'genre:bl', label: 'BL', group: 'genre', isStructured: true }],
+      setting: [{ slug: 'setting:campus', label: '校園', group: 'setting', isStructured: true }],
+      topic: [{ slug: 'topic:proof', label: '證明', group: 'topic', isStructured: true }],
+    });
+  });
+});
+
+describe('classifyTags', () => {
+  it('separates structured and free tags', () => {
+    expect(classifyTags(['proof', '閱讀筆記', 'tone:healing'])).toEqual({
+      structured: [
+        { slug: 'topic:proof', label: '證明', group: 'topic', isStructured: true },
+        { slug: 'tone:healing', label: '療癒', group: 'tone', isStructured: true },
+      ],
+      free: [{ slug: '閱讀筆記', label: '閱讀筆記', isStructured: false }],
+    });
+  });
+});
+
+describe('isStructuredTagSlug', () => {
+  it('recognizes official structured tag prefixes only', () => {
+    expect(isStructuredTagSlug('genre:bl')).toBe(true);
+    expect(isStructuredTagSlug('mood:soft')).toBe(false);
+    expect(isStructuredTagSlug('proof')).toBe(false);
+  });
+});
+
+describe('STRUCTURED_TAG_GROUP_ORDER', () => {
+  it('keeps a stable display order for official groups', () => {
+    expect(STRUCTURED_TAG_GROUP_ORDER).toEqual([
+      'genre',
+      'tone',
+      'setting',
+      'relationship',
+      'topic',
+    ]);
   });
 });

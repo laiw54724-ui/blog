@@ -5,13 +5,23 @@
 
 import type { CommandPreset } from './presets';
 import type { D1Database } from '@cloudflare/workers-types';
-import { generateId, slugify, extractHashtags, generateExcerpt } from '@personal-blog/shared/utils';
+import {
+  generateId,
+  slugify,
+  extractHashtags,
+  generateExcerpt,
+} from '@personal-blog/shared/utils';
+import { normalizeTagInput } from '@personal-blog/shared';
 import { createEntry, addTagsToEntry } from '@personal-blog/shared/db';
 
 export interface CreateEntryInput {
   preset: CommandPreset;
   content: string;
   title?: string;
+  excerpt?: string;
+  extraTags?: string;
+  status?: 'published' | 'draft' | 'private' | 'archived' | 'inbox';
+  visibility?: 'private' | 'unlisted' | 'public';
   selectedCategory?: string;
   entryId?: string;
 }
@@ -34,6 +44,14 @@ interface DbLike {
 }
 
 type DatabaseLike = D1Database | DbLike;
+
+function parseManualTags(input?: string): string[] {
+  if (!input) return [];
+  return input
+    .split(/[,\n]+|\s+/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
 
 /**
  * Extract title from content (first line or auto-generate)
@@ -78,7 +96,8 @@ async function ensureUniqueSlug(db: DatabaseLike, baseSlug: string): Promise<str
  * Find or create a tag by name, return its ID
  */
 async function findOrCreateTag(db: DatabaseLike, tagName: string): Promise<string> {
-  const tagSlug = slugify(tagName);
+  const normalized = normalizeTagInput(tagName);
+  const tagSlug = normalized.slug;
   const existing = await db.prepare('SELECT id FROM tags WHERE slug = ?').bind(tagSlug).first();
 
   if (existing && typeof existing.id === 'string') {
@@ -88,7 +107,7 @@ async function findOrCreateTag(db: DatabaseLike, tagName: string): Promise<strin
   const tagId = generateId('tag');
   await db
     .prepare('INSERT INTO tags (id, name, slug) VALUES (?, ?, ?)')
-    .bind(tagId, tagName, tagSlug)
+    .bind(tagId, normalized.label, tagSlug)
     .run();
 
   return tagId;
@@ -117,10 +136,15 @@ export async function createEntryFromCommand(
     const entryId = input.entryId || generateId('entry');
     const baseSlug = slugify(title);
     const slug = await ensureUniqueSlug(db, baseSlug);
-    const tags = extractHashtags(normalizedContent);
-    const excerpt = generateExcerpt(normalizedContent);
+    const manualTags = parseManualTags(input.extraTags);
+    const tags = Array.from(
+      new Set([...(preset.default_tags || []), ...manualTags, ...extractHashtags(normalizedContent)])
+    );
+    const excerpt = input.excerpt?.trim() || generateExcerpt(normalizedContent);
 
     const finalCategory = selectedCategory || preset.category;
+    const status = input.status || preset.status;
+    const visibility = input.visibility || preset.visibility;
 
     await createEntry(db as D1Database, {
       id: entryId,
@@ -130,8 +154,8 @@ export async function createEntryFromCommand(
       title,
       content_markdown: normalizedContent,
       excerpt,
-      status: preset.status,
-      visibility: preset.visibility,
+      status,
+      visibility,
       source: 'discord',
     });
 
@@ -139,7 +163,9 @@ export async function createEntryFromCommand(
       const tagIds: string[] = [];
       for (const tagName of tags) {
         const tagId = await findOrCreateTag(db, tagName);
-        tagIds.push(tagId);
+        if (!tagIds.includes(tagId)) {
+          tagIds.push(tagId);
+        }
       }
       await addTagsToEntry(db as D1Database, entryId, tagIds);
     }
@@ -147,7 +173,7 @@ export async function createEntryFromCommand(
     return {
       success: true,
       entry_id: entryId,
-      message: `✅ 已建立 ${preset.description}\n\n${title}`,
+      message: `✅ 已建立 ${preset.description}\n狀態：${status}｜可見性：${visibility}\n\n${title}`,
     };
   } catch (error) {
     console.error('Error creating entry:', error);

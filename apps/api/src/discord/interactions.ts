@@ -1,4 +1,6 @@
 import type { Context } from 'hono';
+import type { D1Database, ExecutionContext, R2Bucket } from '@cloudflare/workers-types';
+import type { Entry } from '@personal-blog/shared';
 import { verifyDiscordSignature } from './verify';
 import { CHINESE_TO_ENGLISH_COMMAND_MAP, getCommandPreset } from './presets';
 import { openCreateModal } from './handlers/create';
@@ -8,12 +10,111 @@ import { handleComponent } from './handlers/component';
 import { getEntryBySlug, createAsset } from '@personal-blog/shared/db';
 import { processAttachments } from './attachments';
 
+interface DiscordEnv {
+  DB?: D1Database;
+  ASSETS_BUCKET?: R2Bucket;
+  DISCORD_PUBLIC_KEY: string;
+  DISCORD_APPLICATION_ID?: string;
+  DISCORD_TOKEN?: string;
+}
+
 interface UserProfilePreviewRow {
   name?: string | null;
   bio?: string | null;
 }
 
-export async function handleDiscordInteraction(c: Context) {
+interface DiscordAttachmentOption {
+  name?: string;
+  value?: string;
+  type?: number;
+  options?: DiscordAttachmentOption[];
+}
+
+interface DiscordResolvedAttachment {
+  id: string;
+  filename: string;
+  size: number;
+  url: string;
+  content_type?: string;
+  width?: number;
+  height?: number;
+}
+
+interface DiscordModalRow {
+  components?: Array<{ custom_id?: string; value?: string }>;
+}
+
+type DiscordEntry = Pick<Entry, 'id' | 'title' | 'cover_asset_id'>;
+
+function resolveCommandKey(name: string, options: DiscordAttachmentOption[] = []): string {
+  const base = CHINESE_TO_ENGLISH_COMMAND_MAP[name] || name;
+  const firstOption = options[0];
+  if (!firstOption || firstOption.type !== 1 || !firstOption.name) {
+    return base;
+  }
+
+  if (name === '動態') {
+    if (firstOption.name === '旅記') return 'travel';
+    return 'post';
+  }
+
+  if (name === '文章') {
+    if (firstOption.name === '書摘') return 'reading';
+    return 'article';
+  }
+
+  if (name === '個人資料') {
+    if (firstOption.name === '頭貼') return 'profile_avatar';
+    if (firstOption.name === '橫條') return 'profile_banner';
+    return 'profile';
+  }
+
+  return base;
+}
+
+function resolveCommandOptions(options: DiscordAttachmentOption[] = []): DiscordAttachmentOption[] {
+  const firstOption = options[0];
+  if (firstOption?.type === 1 && Array.isArray(firstOption.options)) {
+    return firstOption.options;
+  }
+  return options;
+}
+
+function buildHelpMessage() {
+  return [
+    'Discord 指令大全',
+    '',
+    '1. `/動態`',
+    '一般：新增一般貼文',
+    '旅記：新增旅行貼文',
+    '可在 modal 裡補摘要、發佈設定、tags',
+    '',
+    '2. `/文章`',
+    '一般：新增一般文章草稿',
+    '書摘：新增書摘或閱讀心得',
+    '可在 modal 裡補摘要、發佈設定、tags',
+    '',
+    '3. `/補圖`',
+    'slug：指定文章 slug',
+    'image：上傳圖片',
+    'alt：圖片說明（選填）',
+    '',
+    '4. `/個人資料`',
+    '編輯：修改名稱、簡介、連結',
+    '頭貼：上傳頭貼圖片',
+    '橫條：上傳 banner 圖片',
+    '',
+    '5. `/管理`',
+    '查看最近內容，並可編輯、典藏、刪除',
+    '',
+    'Tag 規則',
+    'structured tags：genre / tone / setting / relationship / topic',
+    'free tags：其他自由關鍵字',
+    '例：proof -> topic:proof，travel -> setting:travel',
+  ].join('\n');
+}
+
+export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv }>) {
   // ── Verify signature ─────────────────────────────────────────────────────
   const signature = c.req.header('x-signature-ed25519');
   const timestamp = c.req.header('x-signature-timestamp');
@@ -26,14 +127,14 @@ export async function handleDiscordInteraction(c: Context) {
     signature,
     timestamp,
     body,
-    (c.env as any).DISCORD_PUBLIC_KEY
+    c.env.DISCORD_PUBLIC_KEY
   );
   if (!isValid) {
     return c.json({ error: 'Invalid signature' }, 401);
   }
 
   const payload = JSON.parse(body);
-  const db = (c.env as any)?.DB;
+  const db = c.env.DB;
   if (!db) return c.json({ error: 'Database not configured' }, 500);
 
   // ── 1. PING ───────────────────────────────────────────────────────────────
@@ -44,16 +145,18 @@ export async function handleDiscordInteraction(c: Context) {
   // ── 2. APPLICATION_COMMAND ────────────────────────────────────────────────
   if (payload.type === 2) {
     const name: string = payload.data?.name ?? '';
-    const commandKey = CHINESE_TO_ENGLISH_COMMAND_MAP[name] || name;
+    const rawOptions = (payload.data?.options ?? []) as DiscordAttachmentOption[];
+    const commandKey = resolveCommandKey(name, rawOptions);
+    const options = resolveCommandOptions(rawOptions);
 
-    // /我的文章 — deferred ephemeral, then follow-up via REST
+    // /管理 — deferred ephemeral, then follow-up via REST
     if (commandKey === 'list') {
-      const appId = (c.env as any)?.DISCORD_APPLICATION_ID;
-      const discordToken = (c.env as any)?.DISCORD_TOKEN;
+      const appId = c.env.DISCORD_APPLICATION_ID;
+      const discordToken = c.env.DISCORD_TOKEN;
       const token: string = payload.token;
 
       if (appId && discordToken && token) {
-        (c.executionCtx as any).waitUntil(
+        (c.executionCtx as ExecutionContext).waitUntil(
           sendListFollowup(db, appId, token, discordToken)
         );
       }
@@ -62,37 +165,47 @@ export async function handleDiscordInteraction(c: Context) {
       return c.json({ type: 5, data: { flags: 64 } });
     }
 
-    // /附圖 — attach image(s) to an existing entry by slug
+    if (commandKey === 'help' || name === 'help') {
+      return c.json({
+        type: 4,
+        data: {
+          content: buildHelpMessage(),
+          flags: 64,
+        },
+      });
+    }
+
+    // /補圖 — attach image(s) to an existing entry by slug
     if (commandKey === 'attach') {
-      const slugOpt = payload.data?.options?.find((o: any) => o.name === 'slug');
-      const altOpt = payload.data?.options?.find((o: any) => o.name === 'alt');
+      const slugOpt = options.find((option) => option.name === 'slug');
+      const altOpt = options.find((option) => option.name === 'alt');
       const slug = slugOpt?.value?.trim();
 
       if (!slug) {
         return c.json({ type: 4, data: { content: '❌ 請提供文章 slug', flags: 64 } });
       }
 
-      const entry = await getEntryBySlug(db, slug);
+      const entry = (await getEntryBySlug(db, slug)) as DiscordEntry | null;
       if (!entry) {
         return c.json({ type: 4, data: { content: `❌ 找不到 slug: ${slug}`, flags: 64 } });
       }
 
-      const entryId = (entry as any).id;
+      const entryId = entry.id;
       const resolvedAttachments = payload.data?.resolved?.attachments
-        ? Object.values(payload.data.resolved.attachments)
+        ? (Object.values(payload.data.resolved.attachments) as DiscordResolvedAttachment[])
         : [];
 
       if (resolvedAttachments.length === 0) {
         return c.json({ type: 4, data: { content: '❌ 請附上至少一張圖片', flags: 64 } });
       }
 
-      const bucket = (c.env as any)?.ASSETS_BUCKET;
+      const bucket = c.env.ASSETS_BUCKET;
       if (!bucket) {
         return c.json({ type: 4, data: { content: '❌ R2 bucket 未設定', flags: 64 } });
       }
 
       try {
-        const result = await processAttachments(resolvedAttachments as any[], entryId, bucket, {
+        const result = await processAttachments(resolvedAttachments, entryId, bucket, {
           altText: altOpt?.value?.trim(),
           coverMode: 'auto',
         });
@@ -112,7 +225,7 @@ export async function handleDiscordInteraction(c: Context) {
         }
 
         // Set first cover asset if none set yet
-        if (result.pendingAssets.some((a) => a.kind === 'cover') && !(entry as any).cover_asset_id) {
+        if (result.pendingAssets.some((a) => a.kind === 'cover') && !entry.cover_asset_id) {
           const coverId = result.pendingAssets.find((a) => a.kind === 'cover')!.id;
           await db.prepare('UPDATE entries SET cover_asset_id = ? WHERE id = ?').bind(coverId, entryId).run();
         }
@@ -120,7 +233,7 @@ export async function handleDiscordInteraction(c: Context) {
         return c.json({
           type: 4,
           data: {
-            content: `🖼️ 已為「${(entry as any).title || slug}」附加 ${result.pendingAssets.length} 張圖片`,
+            content: `🖼️ 已為「${entry.title || slug}」附加 ${result.pendingAssets.length} 張圖片`,
             flags: 64,
           },
         });
@@ -180,17 +293,19 @@ export async function handleDiscordInteraction(c: Context) {
       });
     }
 
-    // /設定頭貼 or /設定橫條 — upload profile image to R2
+    // /個人資料 頭貼 or 橫條 — upload profile image to R2
     if (commandKey === 'profile_avatar' || commandKey === 'profile_banner') {
-      const imageOpt = payload.data?.options?.find((o: any) => o.name === 'image');
+      const imageOpt = options.find((option) => option.name === 'image');
       const imageId = imageOpt?.value;
-      const attachment = imageId ? payload.data?.resolved?.attachments?.[imageId] : null;
+      const attachment = imageId
+        ? (payload.data?.resolved?.attachments?.[imageId] as DiscordResolvedAttachment | null)
+        : null;
 
       if (!attachment) {
         return c.json({ type: 4, data: { content: '❌ 請附上圖片', flags: 64 } });
       }
 
-      const bucket = (c.env as any)?.ASSETS_BUCKET;
+      const bucket = c.env.ASSETS_BUCKET;
       if (!bucket) {
         return c.json({ type: 4, data: { content: '❌ R2 bucket 未設定', flags: 64 } });
       }
@@ -221,7 +336,7 @@ export async function handleDiscordInteraction(c: Context) {
       }
     }
 
-    // /貼文 /文章 /旅記 /書摘 — open create modal
+    // /動態 /文章（含子命令）— open create modal
     const preset = getCommandPreset(commandKey);
     if (preset) {
       return c.json(openCreateModal(preset, commandKey));
@@ -255,7 +370,9 @@ export async function handleDiscordInteraction(c: Context) {
 
     if (customId === 'profile_modal') {
       const get = (id: string) =>
-        components.flatMap((r: any) => r.components).find((c: any) => c.custom_id === id)?.value || '';
+        (components as DiscordModalRow[])
+          .flatMap((row) => row.components ?? [])
+          .find((component) => component.custom_id === id)?.value || '';
 
       const name = get('name').trim() || 'life';
       const bio = get('bio').trim();

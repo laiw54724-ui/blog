@@ -1,8 +1,10 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
 import PostFeedCard from '../components/PostFeedCard.astro'
+import SystemNoticeCard from '../components/SystemNoticeCard.astro'
 import { getPosts, getArticles, getProfile } from '../lib/data'
 import { buildEntryCardModels } from '../lib/presenters'
+import { buildUnifiedFeed, isSystemNotice } from '../lib/feed'
 import { applyPageCacheHeaders } from '../lib/response'
 
 const [profile, allPosts, allArticles] = await Promise.all([
@@ -12,6 +14,8 @@ const [profile, allPosts, allArticles] = await Promise.all([
 ])
 
 const recentPosts = await buildEntryCardModels(allPosts.slice(0, 8), { excerptLength: 120 })
+const recentArticles = await buildEntryCardModels(allArticles, { excerptLength: 120 })
+const dayGroups = buildUnifiedFeed(recentPosts, recentArticles)
 
 const postCount = allPosts.length
 const articleCount = allArticles.length
@@ -21,7 +25,7 @@ applyPageCacheHeaders(Astro.response, 'stream')
 
 <BaseLayout
   title={`${profile.name} | life·`}
-  description={profile.bio || '動態留下當下，文章留下價值。'}
+  description={profile.bio || '貼文留下當下，文章留下價值。'}
 >
   <div class="profile-page">
 
@@ -65,7 +69,7 @@ applyPageCacheHeaders(Astro.response, 'stream')
       <div class="profile-stats">
         <a href="/stream" class="stat-item">
           <span class="stat-count">{postCount}</span>
-          <span class="stat-label">動態</span>
+          <span class="stat-label">貼文</span>
         </a>
         <a href="/articles" class="stat-item">
           <span class="stat-count">{articleCount}</span>
@@ -76,26 +80,38 @@ applyPageCacheHeaders(Astro.response, 'stream')
 
     <!-- Feed -->
     <div class="profile-feed">
-      <h2 class="feed-heading">最近動態</h2>
-      {recentPosts.length > 0
-        ? recentPosts.map((vm) => (
-            <PostFeedCard
-              href={vm.href}
-              title={vm.displayTitle}
-              excerpt={vm.displayExcerpt}
-              date={vm.displayDate}
-              displayName={profile.name}
-              avatarUrl={profile.avatar_url}
-              categoryLabel={vm.categoryLabel}
-              coverUrl={vm.coverUrl}
-              coverAlt={vm.coverAlt}
-              stats={vm.metrics}
-            />
+      <h2 class="feed-heading">最新內容</h2>
+      {dayGroups.length > 0
+        ? dayGroups.map((group) => (
+            <section class="about-day-group">
+              <div class="about-day-label">
+                <span>{group.displayDate}</span>
+              </div>
+              <div class="about-day-items">
+                {group.items.map((item) =>
+                  isSystemNotice(item) ? (
+                    <SystemNoticeCard message={item.message} href={item.href} />
+                  ) : (
+                    <PostFeedCard
+                      href={item.href}
+                      title={item.displayTitle}
+                      excerpt={item.displayExcerpt}
+                      date={item.displayDate}
+                      displayName={profile.name}
+                      avatarUrl={profile.avatar_url}
+                      coverUrl={item.coverUrl}
+                      coverAlt={item.coverAlt}
+                      stats={item.metrics}
+                    />
+                  )
+                )}
+              </div>
+            </section>
           ))
-        : <p class="empty">還沒有任何動態</p>
+        : <p class="empty">還沒有任何內容</p>
       }
-      {allPosts.length > 8 && (
-        <a href="/stream" class="view-all">查看全部動態 →</a>
+      {(allPosts.length > 0 || allArticles.length > 0) && (
+        <a href="/stream" class="view-all">查看全部貼文 →</a>
       )}
     </div>
 
@@ -257,6 +273,35 @@ applyPageCacheHeaders(Astro.response, 'stream')
 
   /* ── Feed ── */
   .profile-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .about-day-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .about-day-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 0.35rem;
+    color: var(--text-muted, #8a88a8);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .about-day-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border, #dddaf0);
+  }
+
+  .about-day-items {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;

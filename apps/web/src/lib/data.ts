@@ -3,7 +3,7 @@
  * Provides centralized fetching, error handling, and caching
  */
 
-import type { Entry, ResolvedCoverAsset, EntryMetrics, Asset, CommentThread } from '@personal-blog/shared';
+import type { Entry, ResolvedCoverAsset, EntryMetrics, Asset, CommentThread, TagSummary } from '@personal-blog/shared';
 
 // API_BASE uses PUBLIC_API_URL environment variable (set at build time)
 const API_BASE =
@@ -55,6 +55,9 @@ const CACHE_TTLS: Record<string, number> = {
   'posts:all': 30 * 1000, // /stream: 30 seconds
   'articles:all': 300 * 1000, // /articles: 5 minutes
   'entries:category': 300 * 1000, // category pages: 5 minutes
+  'entries:search': 60 * 1000, // search: 1 minute
+  'tags:all': 300 * 1000, // tag index: 5 minutes
+  'entries:tag': 300 * 1000, // tag pages: 5 minutes
   'entry:detail': 600 * 1000, // detail pages: 10 minutes
 };
 
@@ -81,6 +84,14 @@ function setCache<T>(key: string, data: T): void {
 
 function clearCache(): void {
   cache.clear();
+}
+
+function normalizeSearchText(text: string): string {
+  return text
+    .normalize('NFKC')
+    .toLocaleLowerCase('zh-TW')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -200,6 +211,179 @@ export async function getEntriesByType(type: 'post' | 'article'): Promise<Entry[
     console.error(`Error fetching entries of type ${type}:`, error);
     return [];
   }
+}
+
+export async function searchEntries(query: string, options?: { limit?: number }): Promise<Entry[]> {
+  const normalized = query.trim();
+  if (!normalized) return [];
+
+  const limit = options?.limit ?? 20;
+  const cacheKey = `entries:search:${normalized}:${limit}`;
+  const cached = getCached<Entry[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const response = await apiFetch(
+      `/api/entries/search?q=${encodeURIComponent(normalized)}&limit=${limit}`
+    );
+    if (!response.ok) {
+      console.error(`Failed to search entries for "${normalized}":`, response.statusText);
+      return fallbackSearchEntries(normalized, limit);
+    }
+    const { data } = await response.json();
+    const result = data || [];
+    if (result.length > 0) {
+      setCache(cacheKey, result);
+      return result;
+    }
+
+    const fallbackResults = await fallbackSearchEntries(normalized, limit);
+    setCache(cacheKey, fallbackResults);
+    return fallbackResults;
+  } catch (error) {
+    console.error(`Error searching entries for "${normalized}":`, error);
+    return fallbackSearchEntries(normalized, limit);
+  }
+}
+
+async function fallbackSearchEntries(query: string, limit: number): Promise<Entry[]> {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return [];
+
+  const [posts, articles] = await Promise.all([getPosts(), getArticles()]);
+  const allEntries = [...posts, ...articles];
+
+  const scored = allEntries
+    .map((entry) => {
+      const haystacks = [
+        entry.title || '',
+        entry.excerpt || '',
+        entry.content_markdown || '',
+      ].map(normalizeSearchText);
+
+      let score = 0;
+      if (haystacks[0].includes(normalizedQuery)) score += 4;
+      if (haystacks[1].includes(normalizedQuery)) score += 2;
+      if (haystacks[2].includes(normalizedQuery)) score += 1;
+
+      return { entry, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(b.entry.published_at || b.entry.created_at).getTime()
+        - new Date(a.entry.published_at || a.entry.created_at).getTime();
+    })
+    .slice(0, limit)
+    .map((item) => item.entry);
+
+  return scored;
+}
+
+export async function getPopularTags(options?: {
+  type?: 'post' | 'article';
+  category?: string;
+  limit?: number;
+}): Promise<TagSummary[]> {
+  const type = options?.type ?? '';
+  const category = options?.category ?? '';
+  const limit = options?.limit ?? 30;
+  const cacheKey = `tags:all:${type}:${category}:${limit}`;
+  const cached = getCached<TagSummary[]>(cacheKey);
+  if (cached) return cached;
+
+  const search = new URLSearchParams();
+  if (type) search.set('type', type);
+  if (category) search.set('category', category);
+  search.set('limit', String(limit));
+
+  try {
+    const response = await apiFetch(`/api/tags?${search.toString()}`);
+    if (!response.ok) {
+      console.error('Failed to fetch tags:', response.statusText);
+      return [];
+    }
+    const { data } = await response.json();
+    setCache(cacheKey, data || []);
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+    return [];
+  }
+}
+
+export async function getEntriesByTagSlug(
+  slug: string,
+  options?: {
+    type?: 'post' | 'article';
+    category?: string;
+    limit?: number;
+  }
+): Promise<Entry[]> {
+  const normalized = slug.trim();
+  if (!normalized) return [];
+
+  const type = options?.type ?? '';
+  const category = options?.category ?? '';
+  const limit = options?.limit ?? 50;
+  const cacheKey = `entries:tag:${normalized}:${type}:${category}:${limit}`;
+  const cached = getCached<Entry[]>(cacheKey);
+  if (cached) return cached;
+
+  const search = new URLSearchParams();
+  if (type) search.set('type', type);
+  if (category) search.set('category', category);
+  search.set('limit', String(limit));
+
+  try {
+    const response = await apiFetch(`/api/tags/${encodeURIComponent(normalized)}/entries?${search.toString()}`);
+    if (!response.ok) {
+      console.error(`Failed to fetch entries for tag ${normalized}:`, response.statusText);
+      return [];
+    }
+    const { data } = await response.json();
+    setCache(cacheKey, data || []);
+    return data || [];
+  } catch (error) {
+    console.error(`Error fetching entries for tag ${normalized}:`, error);
+    return [];
+  }
+}
+
+export async function getEntriesByTagSlugs(
+  slugs: string[],
+  options?: {
+    type?: 'post' | 'article';
+    category?: string;
+    limitPerTag?: number;
+  }
+): Promise<Entry[]> {
+  const uniqueSlugs = Array.from(new Set(slugs.map((slug) => slug.trim()).filter(Boolean)));
+  if (uniqueSlugs.length === 0) return [];
+
+  const results = await Promise.all(
+    uniqueSlugs.map((slug) =>
+      getEntriesByTagSlug(slug, {
+        type: options?.type,
+        category: options?.category,
+        limit: options?.limitPerTag ?? 24,
+      })
+    )
+  );
+
+  const merged = new Map<string, Entry>();
+  for (const entries of results) {
+    for (const entry of entries) {
+      if (!merged.has(entry.id)) {
+        merged.set(entry.id, entry);
+      }
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => {
+    return new Date(b.published_at || b.created_at).getTime()
+      - new Date(a.published_at || a.created_at).getTime();
+  });
 }
 
 /**

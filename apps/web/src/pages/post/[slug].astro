@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro'
+import ReadingProgress from '../../components/ReadingProgress.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
 import CommentBoard from '../../components/CommentBoard.astro'
 import 'katex/dist/katex.min.css'
@@ -24,7 +25,7 @@ const cleanedMarkdown = titleFromEntry || titleFromContent ? stripFirstH1(entry.
 const renderedContent = await renderMarkdownToHtml(cleanedMarkdown)
 
 const assets = await getAssetsByEntryId(entry.id)
-const API_BASE = (import.meta as any).env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
 
 // Fetch metrics and comments via service binding
 const [metrics, initialComments] = await Promise.all([
@@ -33,9 +34,9 @@ const [metrics, initialComments] = await Promise.all([
 ])
 
 // Build image list: cover first (if set), then extras
-const coverAsset = assets.find((a: any) => a.kind === 'cover')
-const imageAssets = assets.filter((a: any) => a.kind === 'image')
-const allImages: any[] = [
+const coverAsset = assets.find((a) => a.kind === 'cover')
+const imageAssets = assets.filter((a) => a.kind === 'image')
+const allImages = [
   ...(coverAsset ? [coverAsset] : []),
   ...imageAssets,
 ]
@@ -43,25 +44,30 @@ const allImages: any[] = [
 const visibleImages = allImages.slice(0, 4)
 const extraCount = allImages.length - visibleImages.length
 const imageCount = Math.min(allImages.length, 4)
+const getGalleryAspectClass = (asset: (typeof allImages)[number]) => {
+  if (!asset?.width || !asset?.height) return 'is-balanced'
+  const ratio = asset.width / asset.height
+  if (ratio > 2.15) return 'is-ultra-wide'
+  if (ratio < 0.6) return 'is-tall'
+  return 'is-balanced'
+}
 
 applyPageCacheHeaders(Astro.response, 'detail')
 ---
 
 <BaseLayout title={`${displayTitle} | Double River`}>
+  <ReadingProgress />
   <ReaderControls client:load />
   <article class="post">
 
     <!-- Back nav -->
     <div class="post-nav">
-      <a href="/stream" class="btn-back">← 返回動態</a>
+      <a href="/stream" class="btn-back">← 返回貼文</a>
     </div>
 
-    <!-- Top bar: date + category -->
+    <!-- Top bar: date -->
     <div class="post-meta">
       <time datetime={entry.created_at}>{formatDate(entry.created_at)}</time>
-      {entry.category && (
-        <a href={`/c/${entry.category}`} class="category-tag">{entry.category}</a>
-      )}
     </div>
 
     <!-- Post body: content text + images -->
@@ -76,9 +82,9 @@ applyPageCacheHeaders(Astro.response, 'detail')
       <!-- Image gallery (FB-style) -->
       {allImages.length > 0 && (
         <div class="image-gallery" data-count={imageCount}>
-          {visibleImages.map((asset: any, i: number) => (
+          {visibleImages.map((asset, i: number) => (
             <button
-              class="gallery-item"
+              class:list={['gallery-item', getGalleryAspectClass(asset)]}
               data-src={`${API_BASE}/api/assets/${asset.storage_key}`}
               data-alt={asset.alt_text || displayTitle}
               aria-label={`查看圖片 ${i + 1}`}
@@ -201,16 +207,6 @@ applyPageCacheHeaders(Astro.response, 'detail')
     margin-bottom: 0.75rem;
     font-size: 0.85rem;
     color: #999;
-  }
-
-  .category-tag {
-    color: var(--accent, #5b74c8);
-    text-decoration: none;
-    font-size: 0.82rem;
-  }
-
-  .category-tag:hover {
-    text-decoration: underline;
   }
 
   .post-title-wrapper {
@@ -673,7 +669,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
     cursor: pointer;
     border: none;
     padding: 0;
-    background: #111;
+    background: #f7f7fb;
     display: block;
     width: 100%;
   }
@@ -681,9 +677,13 @@ applyPageCacheHeaders(Astro.response, 'detail')
   .gallery-item img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
     transition: opacity 0.2s;
+  }
+
+  .gallery-item.is-balanced img {
+    object-fit: cover;
   }
 
   .gallery-item:hover img {

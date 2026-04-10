@@ -1,0 +1,261 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import EntryCard from '../../components/EntryCard.astro'
+import { getArticles, getEntriesByCategory, getEntriesByTagSlug, getEntriesByTagSlugs, getPopularTags } from '../../lib/data'
+import { buildEntryCardModels, groupTagSummaries } from '../../lib/presenters'
+import { getSeriesDefinition, SERIES_DEFINITIONS } from '../../lib/series'
+import { applyPageCacheHeaders } from '../../lib/response'
+import { normalizeTagInput } from '@personal-blog/shared'
+
+export async function getStaticPaths() {
+  return SERIES_DEFINITIONS.map((series) => ({
+    params: { slug: series.slug },
+  }))
+}
+
+const slug = Astro.params.slug || ''
+const series = getSeriesDefinition(slug)
+
+if (!series) {
+  return Astro.redirect('/articles')
+}
+
+const selectedTag = Astro.url.searchParams.get('tag')?.trim() || ''
+
+let entries = selectedTag
+  ? await getEntriesByTagSlug(selectedTag, { type: 'article', limit: 60 })
+  : await getEntriesByTagSlugs(series.defaultTagSlugs || [], { type: 'article', limitPerTag: 20 })
+
+if (entries.length === 0 && (series.fallbackCategories?.length || 0) > 0) {
+  const categoryEntries = await Promise.all(
+    (series.fallbackCategories || []).map((category) => getEntriesByCategory(category))
+  )
+  entries = categoryEntries
+    .flat()
+    .filter((entry) => entry.entry_type === 'article')
+    .sort((a, b) => new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime())
+}
+
+if (entries.length === 0 && !selectedTag) {
+  const allArticles = await getArticles()
+  entries = allArticles
+}
+
+const cardModels = await buildEntryCardModels(entries, { excerptLength: 140 })
+const tagPool = await getPopularTags({ type: 'article', limit: 50 })
+const groupedTags = groupTagSummaries(tagPool).filter((group) => series.relevantTagGroups.includes(group.key))
+const activeTag = selectedTag ? normalizeTagInput(selectedTag) : null
+
+applyPageCacheHeaders(Astro.response, 'articles')
+---
+
+<BaseLayout title={`${series.title} | Double River`} description={series.description}>
+  <div class="series-shell">
+    <header class="series-header">
+      <p class="series-kicker">{series.kicker}</p>
+      <h1>{series.title}</h1>
+      <p class="series-desc">{series.description}</p>
+    </header>
+
+    <section class="series-filter-card">
+      <div class="series-filter-head">
+        <h2>快速過濾</h2>
+        {activeTag ? <span>目前：#{activeTag.label}</span> : <span>先選一個 tag 縮小範圍</span>}
+      </div>
+      <div class="series-filter-row">
+        <a href={`/series/${series.slug}`} class:list={['series-filter-chip', !activeTag && 'is-active']}>全部</a>
+        {series.quickFilters.map((filter) => (
+          <a
+            href={`/series/${series.slug}?tag=${encodeURIComponent(filter.slug)}`}
+            class:list={['series-filter-chip', selectedTag === filter.slug && 'is-active']}
+          >
+            #{filter.label}
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <div class="series-layout">
+      <section class="series-main">
+        {cardModels.length > 0 ? (
+          <div class="series-list">
+            {cardModels.map((vm) => (
+              <EntryCard
+                href={vm.href}
+                title={vm.displayTitle}
+                excerpt={vm.displayExcerpt}
+                date={vm.displayDate}
+                coverUrl={vm.coverUrl}
+                coverAlt={vm.coverAlt}
+                stats={vm.metrics}
+                variant="list"
+              />
+            ))}
+          </div>
+        ) : (
+          <p class="series-empty">這個專題目前還沒有符合條件的公開文章。</p>
+        )}
+      </section>
+
+      <aside class="series-sidebar">
+        <section class="series-side-card">
+          <h2>同區標籤</h2>
+          <div class="series-tag-groups">
+            {groupedTags.map((group) => (
+              <section class="series-tag-group">
+                <h3>{group.label}</h3>
+                <div class="series-tag-cloud">
+                  {group.tags.map((tag) => (
+                    <a href={`/series/${series.slug}?tag=${encodeURIComponent(tag.slug)}`} class="series-tag-chip">
+                      <span>#{tag.normalizedLabel}</span>
+                      <small>{tag.entry_count}</small>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .series-shell {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+  }
+
+  .series-header {
+    margin-bottom: 1.4rem;
+  }
+
+  .series-kicker {
+    margin: 0 0 0.45rem;
+    color: #8f89b2;
+    font-size: 0.76rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .series-header h1 {
+    margin: 0 0 0.45rem;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    line-height: 1;
+    letter-spacing: -0.05em;
+  }
+
+  .series-desc {
+    max-width: 48rem;
+    color: #726d89;
+  }
+
+  .series-filter-card,
+  .series-side-card {
+    padding: 1rem 1.05rem;
+    border: 1px solid #dddaf0;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .series-filter-card {
+    margin-bottom: 1.2rem;
+  }
+
+  .series-filter-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: baseline;
+    margin-bottom: 0.8rem;
+  }
+
+  .series-filter-head h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .series-filter-head span {
+    color: #8f89b2;
+    font-size: 0.82rem;
+  }
+
+  .series-filter-row,
+  .series-tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .series-filter-chip,
+  .series-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid #ddd8ef;
+    border-radius: 999px;
+    padding: 0.42rem 0.72rem;
+    background: #fff;
+    color: #4f4a68;
+    font-size: 0.85rem;
+  }
+
+  .series-filter-chip.is-active,
+  .series-tag-chip:hover,
+  .series-filter-chip:hover {
+    border-color: #ccd5f4;
+    background: #f7f9ff;
+    color: #4966c7;
+  }
+
+  .series-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .series-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .series-sidebar {
+    position: sticky;
+    top: 6rem;
+  }
+
+  .series-tag-groups {
+    display: grid;
+    gap: 0.95rem;
+  }
+
+  .series-tag-group h3 {
+    margin: 0 0 0.55rem;
+    font-size: 0.74rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #8f89b2;
+  }
+
+  .series-empty {
+    padding: 1.1rem;
+    border-radius: 16px;
+    border: 1px dashed #d9d3ec;
+    color: #7f7896;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  @media (max-width: 900px) {
+    .series-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .series-sidebar {
+      position: static;
+    }
+  }
+</style>

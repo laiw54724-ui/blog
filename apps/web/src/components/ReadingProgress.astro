@@ -1,0 +1,40 @@
+<div id="reading-progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0} aria-label="閱讀進度"></div>
+
+<script>
+  function initProgress() {
+    const bar = document.getElementById('reading-progress-bar');
+    if (!bar) return;
+
+    const update = () => {
+      const el = document.documentElement;
+      const scrolled = el.scrollTop || document.body.scrollTop;
+      const total = el.scrollHeight - el.clientHeight;
+      const pct = total > 0 ? Math.min(100, Math.round((scrolled / total) * 100)) : 0;
+      bar.style.setProperty('--pct', `${pct}%`);
+      bar.setAttribute('aria-valuenow', String(pct));
+    };
+
+    if (document.body.dataset.progressBound !== '1') {
+      window.addEventListener('scroll', update, { passive: true });
+      document.body.dataset.progressBound = '1';
+    }
+    update();
+  }
+
+  initProgress();
+  document.addEventListener('astro:after-swap', initProgress);
+</script>
+
+<style>
+  #reading-progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--pct, 0%);
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), #a084e8);
+    z-index: 200;
+    transition: width 0.1s linear;
+    border-radius: 0 2px 2px 0;
+  }
+</style>

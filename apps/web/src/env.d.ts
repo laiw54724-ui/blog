@@ -1,15 +1,13 @@
-/// <reference path="../.astro/types.d.ts" />
+import '../.astro/types.d.ts'
 
-interface ImportMetaEnv {
-  readonly PUBLIC_API_URL?: string
-}
+export {}
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
+declare global {
+  interface ImportMetaEnv {
+    readonly PUBLIC_API_URL?: string
+  }
 
-declare module 'cloudflare:workers' {
-  export const env: {
-    API_SERVICE?: { fetch: typeof fetch } | null
+  interface ImportMeta {
+    readonly env: ImportMetaEnv
   }
 }

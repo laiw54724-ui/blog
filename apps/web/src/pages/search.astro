@@ -1,0 +1,352 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import EntryCard from '../components/EntryCard.astro'
+import { searchEntries, getPopularTags } from '../lib/data'
+import { buildEntryCardModels, splitTagSummaryGroups } from '../lib/presenters'
+import { applyPageCacheHeaders } from '../lib/response'
+
+const query = Astro.url.searchParams.get('q')?.trim() || ''
+const type = Astro.url.searchParams.get('type')?.trim()
+
+let results = query ? await searchEntries(query, { limit: 30 }) : []
+if (type === 'article' || type === 'post') {
+  results = results.filter((entry) => entry.entry_type === type)
+}
+
+const resultModels = await buildEntryCardModels(results, { excerptLength: 140 })
+const popularTags = await getPopularTags({ type: type === 'article' || type === 'post' ? type : undefined, limit: 18 })
+const groupedPopularTags = splitTagSummaryGroups(popularTags)
+
+applyPageCacheHeaders(Astro.response, query ? 'stream' : 'articles')
+---
+
+<BaseLayout title={`搜尋${query ? `：${query}` : ''} | Double River`} description="搜尋文章、貼文與標籤入口。">
+  <div class="search-shell">
+    <header class="search-header">
+      <p class="search-kicker">search & discover</p>
+      <h1>搜尋</h1>
+      <p class="search-desc">先找內容，再順著標籤往下逛。</p>
+    </header>
+
+    <form class="search-form" action="/search" method="get">
+      <label class="sr-only" for="search-input">搜尋內容</label>
+      <input id="search-input" type="search" name="q" value={query} placeholder="搜尋標題、內文、摘要…" />
+      {type && <input type="hidden" name="type" value={type} />}
+      <button type="submit">搜尋</button>
+    </form>
+
+    <div class="search-filter-row">
+      <a href="/search" class:list={['search-filter', !type && 'is-active']}>全部</a>
+      <a href={`/search?${new URLSearchParams(query ? { q: query, type: 'post' } : { type: 'post' }).toString()}`} class:list={['search-filter', type === 'post' && 'is-active']}>貼文</a>
+      <a href={`/search?${new URLSearchParams(query ? { q: query, type: 'article' } : { type: 'article' }).toString()}`} class:list={['search-filter', type === 'article' && 'is-active']}>文章</a>
+    </div>
+
+    {query ? (
+      <section class="search-results">
+        <div class="search-results-head">
+          <h2>搜尋結果</h2>
+          <p>{resultModels.length} 筆結果</p>
+        </div>
+
+        {resultModels.length > 0 ? (
+          <div class="search-results-list">
+            {resultModels.map((vm) => (
+              <EntryCard
+                href={vm.href}
+                title={vm.displayTitle}
+                excerpt={vm.displayExcerpt}
+                date={vm.displayDate}
+                typeLabel={vm.typeLabel}
+                coverUrl={vm.coverUrl}
+                coverAlt={vm.coverAlt}
+                stats={vm.metrics}
+                variant="list"
+                showTypeBadge={true}
+              />
+            ))}
+          </div>
+        ) : (
+          <p class="search-empty">找不到符合的內容，試試換個關鍵字或看看熱門標籤。</p>
+        )}
+      </section>
+    ) : (
+      <section class="search-discovery">
+        <div class="search-panel">
+          <div class="search-panel-head">
+            <h2>熱門標籤</h2>
+            <a href="/tags">全部標籤</a>
+          </div>
+          <div class="search-tag-groups">
+            {groupedPopularTags.structured.length > 0 && (
+              <section class="search-tag-section">
+                <p class="search-tag-section-kicker">structured tags</p>
+                {groupedPopularTags.structured.map((group) => (
+                  <section class="search-tag-group">
+                    <h3>{group.label}</h3>
+                    <div class="search-tag-cloud">
+                      {group.tags.map((tag) => (
+                        <a href={`/tags/${tag.slug}`} class="search-tag">
+                          <span>#{tag.normalizedLabel}</span>
+                          <small>{tag.entry_count}</small>
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </section>
+            )}
+            {groupedPopularTags.free.length > 0 && (
+              <section class="search-tag-section">
+                <p class="search-tag-section-kicker">free tags</p>
+                {groupedPopularTags.free.map((group) => (
+                  <section class="search-tag-group">
+                    <h3>{group.label}</h3>
+                    <div class="search-tag-cloud">
+                      {group.tags.map((tag) => (
+                        <a href={`/tags/${tag.slug}`} class="search-tag search-tag-free">
+                          <span>#{tag.normalizedLabel}</span>
+                          <small>{tag.entry_count}</small>
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </section>
+            )}
+          </div>
+        </div>
+      </section>
+    )}
+  </div>
+</BaseLayout>
+
+<style>
+  .search-shell {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+  }
+
+  .search-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .search-kicker {
+    margin: 0 0 0.45rem;
+    font-size: 0.76rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #8f89b2;
+  }
+
+  .search-header h1 {
+    margin: 0 0 0.5rem;
+    font-size: clamp(2.1rem, 5vw, 3.2rem);
+    line-height: 1.02;
+    letter-spacing: -0.05em;
+  }
+
+  .search-desc {
+    color: #726d89;
+  }
+
+  .search-form {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .search-form input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #dcd8ef;
+    border-radius: 16px;
+    padding: 0.95rem 1rem;
+    font-size: 1rem;
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  .search-form button {
+    border: 1px solid #cfd7f5;
+    background: #5b74c8;
+    color: #fff;
+    border-radius: 16px;
+    padding: 0.95rem 1.15rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .search-filter-row {
+    display: flex;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+
+  .search-filter {
+    padding: 0.42rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid #ddd8ef;
+    color: #66627b;
+    background: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+  }
+
+  .search-filter.is-active {
+    color: #4f64ba;
+    background: #eef2ff;
+    border-color: #ccd4f4;
+  }
+
+  .search-results-head,
+  .search-panel h2 {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: baseline;
+    margin-bottom: 1rem;
+  }
+
+  .search-results-head h2,
+  .search-panel h2 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  .search-results-head p {
+    color: #8f89a8;
+    font-size: 0.92rem;
+  }
+
+  .search-panel-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: baseline;
+    margin-bottom: 1rem;
+  }
+
+  .search-panel-head h2 {
+    margin-bottom: 0;
+  }
+
+  .search-panel-head a {
+    color: #5164b6;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  .search-results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .search-empty {
+    padding: 1.25rem;
+    border: 1px dashed #d8d3ec;
+    border-radius: 16px;
+    color: #7e7894;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .search-discovery {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .search-panel {
+    padding: 1rem 1.05rem;
+    border: 1px solid #dddaf0;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .search-tag {
+    border: 1px solid #ddd8ef;
+    border-radius: 14px;
+    background: #fff;
+    padding: 0.8rem 0.9rem;
+  }
+
+  .search-tag small {
+    color: #9691ac;
+  }
+
+  .search-tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .search-tag-groups {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .search-tag-section {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .search-tag-section-kicker {
+    margin: 0;
+    color: #8f89b2;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .search-tag-group h3 {
+    margin: 0 0 0.65rem;
+    font-size: 0.82rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #8f89b2;
+  }
+
+  .search-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #4d4a66;
+  }
+
+  .search-tag-free {
+    border-style: dashed;
+    background: #fffdf9;
+  }
+
+  .search-category-card:hover,
+  .search-tag:hover {
+    border-color: #ccd5f4;
+    background: #f7f9ff;
+    color: #4966c7;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 640px) {
+    .search-shell {
+      padding: 1.1rem 0.95rem 2rem;
+    }
+
+    .search-form {
+      flex-direction: column;
+    }
+
+    .search-form button {
+      width: 100%;
+    }
+  }
+</style>

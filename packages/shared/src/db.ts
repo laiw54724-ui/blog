@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
+import type { TagSummary } from './types';
 
 export interface DbContext {
   db: D1Database;
@@ -57,18 +58,39 @@ export async function getEntries(
 }
 
 /**
- * Get recent entries for management UI (includes all statuses except deleted)
+ * Get recent entries for management UI with optional filters.
  */
-export async function getRecentEntries(db: D1Database, limit = 5) {
-  const result = await db
-    .prepare(
-      `SELECT id, slug, title, entry_type, category, status, visibility, created_at
+export async function getRecentEntries(
+  db: D1Database,
+  options?: {
+    limit?: number;
+    entryType?: string;
+    status?: string;
+  }
+) {
+  const params: unknown[] = [];
+  let query = `SELECT id, slug, title, entry_type, category, status, visibility, created_at
        FROM entries
-       WHERE status != 'archived'
-       ORDER BY created_at DESC
-       LIMIT ?`
-    )
-    .bind(limit)
+       WHERE 1 = 1`;
+
+  if (options?.entryType) {
+    query += ' AND entry_type = ?';
+    params.push(options.entryType);
+  }
+
+  if (options?.status) {
+    query += ' AND status = ?';
+    params.push(options.status);
+  } else {
+    query += ` AND status != 'archived'`;
+  }
+
+  query += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(options?.limit ?? 5);
+
+  const result = await db
+    .prepare(query)
+    .bind(...params)
     .all();
   return result.results || [];
 }
@@ -88,6 +110,32 @@ export async function getEntryBySlug(db: D1Database, slug: string, visibility?: 
       .first();
   }
   return await db.prepare('SELECT * FROM entries WHERE slug = ? LIMIT 1').bind(slug).first();
+}
+
+export async function getPublicEntryById(db: D1Database, id: string) {
+  return await db
+    .prepare(
+      `SELECT * FROM entries
+       WHERE id = ?
+         AND status = 'published'
+         AND visibility = 'public'
+       LIMIT 1`
+    )
+    .bind(id)
+    .first();
+}
+
+export async function getPublicEntryBySlug(db: D1Database, slug: string) {
+  return await db
+    .prepare(
+      `SELECT * FROM entries
+       WHERE slug = ?
+         AND status = 'published'
+         AND visibility = 'public'
+       LIMIT 1`
+    )
+    .bind(slug)
+    .first();
 }
 
 /**
@@ -245,6 +293,100 @@ export async function addTagsToEntry(db: D1Database, entryId: string, tagIds: st
       .bind(entryId, tagId)
       .run();
   }
+}
+
+/**
+ * Get public tags with entry counts.
+ */
+export async function getPublicTags(
+  db: D1Database,
+  options?: {
+    entryType?: string;
+    category?: string;
+    limit?: number;
+  }
+) {
+  const params: unknown[] = ['published', 'public'];
+  let query = `
+    SELECT
+      tags.id,
+      tags.name,
+      tags.slug,
+      tags.created_at,
+      COUNT(DISTINCT entries.id) AS entry_count
+    FROM tags
+    INNER JOIN entry_tags ON entry_tags.tag_id = tags.id
+    INNER JOIN entries ON entries.id = entry_tags.entry_id
+    WHERE entries.status = ?
+      AND entries.visibility = ?
+  `;
+
+  if (options?.entryType) {
+    query += ' AND entries.entry_type = ?';
+    params.push(options.entryType);
+  }
+
+  if (options?.category) {
+    query += ' AND entries.category = ?';
+    params.push(options.category);
+  }
+
+  query += `
+    GROUP BY tags.id, tags.name, tags.slug, tags.created_at
+    ORDER BY entry_count DESC, tags.name ASC
+  `;
+
+  if (options?.limit) {
+    query += ' LIMIT ?';
+    params.push(options.limit);
+  }
+
+  const result = await db.prepare(query).bind(...params).all();
+  return (result.results || []) as unknown as TagSummary[];
+}
+
+/**
+ * Get public entries by tag slug with newest-first ordering.
+ */
+export async function getPublicEntriesByTagSlug(
+  db: D1Database,
+  slug: string,
+  options?: {
+    entryType?: string;
+    category?: string;
+    limit?: number;
+  }
+) {
+  const params: unknown[] = [slug, 'published', 'public'];
+  let query = `
+    SELECT entries.*
+    FROM entries
+    INNER JOIN entry_tags ON entry_tags.entry_id = entries.id
+    INNER JOIN tags ON tags.id = entry_tags.tag_id
+    WHERE tags.slug = ?
+      AND entries.status = ?
+      AND entries.visibility = ?
+  `;
+
+  if (options?.entryType) {
+    query += ' AND entries.entry_type = ?';
+    params.push(options.entryType);
+  }
+
+  if (options?.category) {
+    query += ' AND entries.category = ?';
+    params.push(options.category);
+  }
+
+  query += ' ORDER BY COALESCE(entries.published_at, entries.created_at) DESC';
+
+  if (options?.limit) {
+    query += ' LIMIT ?';
+    params.push(options.limit);
+  }
+
+  const result = await db.prepare(query).bind(...params).all();
+  return result.results || [];
 }
 
 /**

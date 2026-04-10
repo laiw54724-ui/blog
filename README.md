@@ -15,47 +15,51 @@
 - Cloudflare Worker API 與 Discord interaction webhook
 - D1 為主的 entries / comments / profile / assets 資料模型
 - 公開頁面：
-  - `/`
-  - `/about`
-  - `/stream`
-  - `/articles`
-  - `/c/[category]`
-  - `/post/[slug]`
-  - `/article/[slug]`
+  - `/` — 首頁 hero + 最新貼文 / 文章
+  - `/about` — 個人頁（banner / avatar / bio / feed）
+  - `/stream` — 貼文河道（load more，每次 10 筆）
+  - `/articles` — 文章列表 + 系列入口 + 熱門標籤
+  - `/search` — 全文搜尋，支援 `q` / `type` 過濾
+  - `/tags` — 結構標籤 / 自由標籤探索
+  - `/tags/[slug]` — 依標籤聚合，貼文 + 文章都顯示
+  - `/series/[slug]` — 四個系列入口（journal / works / reviews / play）
+  - `/c/[category]` — 分類頁
+  - `/post/[slug]` — 貼文詳頁（Markdown / 圖片 gallery / 留言）
+  - `/article/[slug]` — 文章詳頁（Markdown + KaTeX / 上下篇導覽）
+  - `/rss.xml` — RSS 2.0 feed（貼文 + 文章合併，最新 50 筆）
+  - `/sitemap.xml` — XML sitemap
 - API 路由：
   - `POST /api/discord/interactions`
   - `GET /api/health`
-  - `GET /api/entries`
+  - `GET /api/entries`、`GET /api/entries/search`
   - `GET /api/entries/slug/:slug`
-  - `GET /api/entries/:id`
-  - `GET /api/entries/:id/assets`
-  - `GET /api/entries/:id/metrics`
-  - `GET /api/entries/metrics`
-  - `GET /api/entries/:id/comments`
-  - `GET /api/profile`
-  - `PUT /api/entries/:id`
-  - `DELETE /api/entries/:id`
-  - `DELETE /api/entries/:id/hard`
-  - `POST /api/entries/:id/clap`
-  - `POST /api/entries/:id/view`
-  - `POST /api/entries/:id/comments`
-  - `PUT /api/profile`
-  - `POST /api/profile/avatar`
-  - `POST /api/profile/banner`
+  - `GET /api/entries/:id`、`PUT`、`DELETE`、`DELETE /hard`
+  - `GET /api/entries/:id/assets`、`/metrics`、`/comments`
+  - `GET /api/entries/metrics`（批次）、`/assets`（批次）
+  - `POST /api/entries/:id/clap`、`/view`、`/comments`
+  - `GET /api/profile`、`PUT`、`POST /avatar`、`POST /banner`
+  - `GET /api/tags`、`GET /api/tags/:slug/entries`
+  - `GET /api/assets/*`
+- UI / UX：
+  - Dark mode（跟隨系統）
+  - Noto Serif TC 字型（文章閱讀頁）
+  - Desktop navbar active state
+  - Mobile 浮動 MENU 按鈕 + 回頂部
+  - 閱讀進度條（post / article 詳頁）
+  - og:image / canonical / RSS autodiscovery link
 - shared package：types / schema / db helpers / utils
-- 工程檢查已打通：
-  - `npm run lint`
-  - `npm test`
-  - `npm run typecheck`
+- 工程檢查全綠：
+  - `npm run lint` — 0 errors
+  - `npm test` — 167 tests passed
+  - `npm run typecheck` — 0 errors
 
 ### 尚未完成或仍在規劃
 
-- `/search`
-- `/tags/[slug]`
-- `/map`
-- RSS / sitemap
+- `/admin` — 單作者輕後台（草稿管理、狀態篩選）
+- `/map` — 地點 / 旅行地圖瀏覽
+- Discord 建立流程補欄位（visibility / tags / 是否公開）
+- 貼文升格文章的完整流程
 - AI 流程與 provider 抽象
-- 貼文升格文章的完整 UI/流程
 
 ## 技術棧
 

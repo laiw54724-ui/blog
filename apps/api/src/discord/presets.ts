@@ -10,6 +10,8 @@ export interface CommandPreset {
   status: 'published' | 'draft';
   visibility: 'private' | 'unlisted' | 'public';
   description: string;
+  default_tags?: string[];
+  lane: 'stream' | 'article';
 }
 
 /**
@@ -18,15 +20,12 @@ export interface CommandPreset {
  * but internally we use English keys for consistency
  */
 export const CHINESE_TO_ENGLISH_COMMAND_MAP: Record<string, string> = {
-  貼文: 'post',
+  動態: 'post',
   文章: 'article',
-  旅記: 'travel',
-  書摘: 'reading',
-  我的文章: 'list',
-  附圖: 'attach',
+  管理: 'list',
+  補圖: 'attach',
   個人資料: 'profile',
-  設定頭貼: 'profile_avatar',
-  設定橫條: 'profile_banner',
+  help: 'help',
 };
 
 export const COMMAND_PRESETS: Record<string, CommandPreset> = {
@@ -36,6 +35,7 @@ export const COMMAND_PRESETS: Record<string, CommandPreset> = {
     status: 'published',
     visibility: 'public',
     description: '貼文：快速分享想法或事件',
+    lane: 'stream',
   },
   article: {
     entry_type: 'article',
@@ -43,6 +43,7 @@ export const COMMAND_PRESETS: Record<string, CommandPreset> = {
     status: 'draft',
     visibility: 'private',
     description: '文章：深入的觀察或評論',
+    lane: 'article',
   },
   travel: {
     entry_type: 'post',
@@ -50,6 +51,8 @@ export const COMMAND_PRESETS: Record<string, CommandPreset> = {
     status: 'published',
     visibility: 'public',
     description: '旅記：旅行中的見聞',
+    default_tags: ['setting:travel'],
+    lane: 'stream',
   },
   reading: {
     entry_type: 'article',
@@ -57,6 +60,8 @@ export const COMMAND_PRESETS: Record<string, CommandPreset> = {
     status: 'published',
     visibility: 'public',
     description: '書摘：讀書心得和摘錄',
+    default_tags: ['topic:reading'],
+    lane: 'article',
   },
   // Future presets ready to add:
   // coffee: { ... }

@@ -1,293 +1,239 @@
 # Discord 指令與互動規格
 
-## 1. 設計原則
+這份文件只記錄**目前已存在**的 Discord 入口、互動流程與資料落點。
 
-- Discord 是主要輸入介面
-- 不做重型 CMS 後台
-- 優先支援「貼上就存」
-- 長文與短文分流
-- 所有公開行為都能回到 Discord 內完成
+## 設計定位
 
----
+- Discord 是內容輸入入口，不是完整 CMS。
+- 目前以**單作者**使用情境為主。
+- 快速輸入在 Discord 完成，整理與閱讀在網站完成。
+- Slash command 以 modal 為主，避免 command option 對長文輸入不友善。
 
-## 2. 主要使用情境
+## 目前已註冊的 Slash Commands
 
-### 情境 A：快速短貼文
+### `/貼文`
 
-你剛喝完一家咖啡廳，想記一句話。
+- 目的：快速新增一則公開動態
+- 內部 key：`post`
+- 預設資料：
+  - `entry_type = post`
+  - `category = journal`
+  - `status = published`
+  - `visibility = public`
 
-操作：
+### `/文章`
 
-1. `/貼文`
-2. 貼上內容
-3. 選分類（可選）
-4. 存檔
+- 目的：新增一篇文章草稿
+- 內部 key：`article`
+- 預設資料：
+  - `entry_type = article`
+  - `category = journal`
+  - `status = draft`
+  - `visibility = private`
 
-結果：
+### `/旅記`
 
-- 建立一筆 `post`
-- 若公開，出現在 `/stream`
+- 目的：快速新增旅遊動態
+- 內部 key：`travel`
+- 預設資料：
+  - `entry_type = post`
+  - `category = travel`
+  - `status = published`
+  - `visibility = public`
 
-### 情境 B：長文文章
+### `/書摘`
 
-你從 iPhone 記事本貼上一整段旅記。
+- 目的：新增讀書文章
+- 內部 key：`reading`
+- 預設資料：
+  - `entry_type = article`
+  - `category = reading`
+  - `status = published`
+  - `visibility = public`
 
-操作：
+### `/我的文章`
 
-1. 貼到 Discord inbox 頻道
-2. 對該訊息使用 `存成文章`
+- 目的：列出最近文章，並透過按鈕進行後續操作
+- 內部 key：`list`
+- 互動方式：
+  - 先回 Discord deferred ephemeral response
+  - 再用 follow-up message 顯示最近內容與操作按鈕
 
-結果：
+### `/附圖`
 
-- 建立一筆 `article`
-- 預設 draft
-- 之後可按 `公開`
+- 目的：對既有 entry 補上圖片
+- 內部 key：`attach`
+- 參數：
+  - `slug`：目標文章 slug
+  - `image`：Discord attachment
+  - `alt`：可選圖片說明
+- 行為：
+  - 下載 Discord CDN 附件
+  - 上傳到 R2
+  - 建立 `assets` 記錄
+  - 第一張圖可自動成為 `cover`
 
-### 情境 C：貼文升格
+### `/個人資料`
 
-你先寫了 3 則京都旅行貼文，之後想整成一篇。
+- 目的：更新個人名稱、簡介與 links JSON
+- 互動方式：開 modal
+- 寫入表：`user_profile`
 
-操作：
+### `/設定頭貼`
 
-1. 在任一貼文預覽卡點 `升格成文章`
-2. 選是否合併相關貼文
+- 目的：上傳個人頭貼
+- 參數：
+  - `image`
+- 行為：
+  - 上傳到 R2 `profile/avatar.*`
+  - 更新 `user_profile.avatar_key`
 
-結果：
+### `/設定橫條`
 
-- 建立 article draft
-- 建 relation 到原貼文
+- 目的：上傳個人頁橫條
+- 參數：
+  - `image`
+- 行為：
+  - 上傳到 R2 `profile/banner.*`
+  - 更新 `user_profile.banner_key`
 
----
+## Modal 規格
 
-## 3. Slash Commands
+### 建立內容 Modal
 
-## `/貼文`
+由以下指令共用：
 
-### 用途
+- `/貼文`
+- `/文章`
+- `/旅記`
+- `/書摘`
 
-快速建立短貼文。
+欄位：
 
-### 欄位
-
-- `content` 必填，多行文字
-- `category` 選填：journal / reading / travel / place
-- `visibility` 選填：private / unlisted / public
-- `tags` 選填，逗號分隔
-
-### 預設規則
-
-- 若 category = journal，visibility 預設 private
-- 其餘預設 public 或 unlisted
-
----
-
-## `/文章`
-
-### 用途
-
-建立長文草稿。
-
-### 欄位
-
-- `title` 選填
-- `content` 必填
-- `category` 必填
-- `visibility` 選填，預設 private 或 draft
-
-### 系統行為
-
-- 建立 `entry_type = article`
-- 狀態預設 `draft`
-
----
-
-## `/旅記`
-
-### 用途
-
-快速建立旅行相關內容。
-
-### 欄位
-
+- `title`
+  - 選填
+  - 留空會從內容推導
 - `content`
-- `city`
-- `country`
-- `visited_at`
-- `visibility`
+  - 必填
+  - 多行文字
 
-### 系統行為
+### 個人資料 Modal
 
-- category 自動為 `travel`
-- AI 可抽景點與交通 tags
+欄位：
 
----
+- `name`
+- `bio`
+- `links`
 
-## `/書摘`
+`links` 目前預期為 JSON 字串，例如：
 
-### 用途
+```json
+[{"label":"GitHub","url":"https://github.com/yourname"}]
+```
 
-快速建立讀書內容。
+## Component / Button 流程
 
-### 欄位
+`/我的文章` 的 follow-up 會觸發 component handler。
 
-- `book_title`
-- `book_author`
-- `quote_or_note`
-- `reflection`
-- `visibility`
+目前 handler 位於：
 
-### 系統行為
+- [handlers/list.ts](/Users/wen/Documents/dev/blog/apps/api/src/discord/handlers/list.ts)
+- [handlers/component.ts](/Users/wen/Documents/dev/blog/apps/api/src/discord/handlers/component.ts)
+- [handlers/modal.ts](/Users/wen/Documents/dev/blog/apps/api/src/discord/handlers/modal.ts)
 
-- category 自動為 `reading`
-- 若內容較短，先建成 post
-- 若反思較長，可直接建成 article
+目前支援的互動包含：
 
----
+- 開啟編輯 modal
+- 典藏 / 刪除確認
+- 批次選取最近內容
 
-## `/探店`
+這一段屬於現有功能，但未來仍會繼續拆小與整理型別。
 
-### 用途
+## 內容建立流程
 
-記錄餐廳 / 咖啡廳。
+### 1. Slash command 進來
 
-### 欄位
+- 驗證 Discord 簽名
+- 解析指令名稱
+- 依 `CHINESE_TO_ENGLISH_COMMAND_MAP` 轉內部 key
 
-- `place_name`
-- `city`
-- `rating`
-- `content`
-- `visited_at`
-- `revisit`
-- `visibility`
+### 2. 建立內容
 
-### 系統行為
+透過：
 
-- category 自動為 `place`
-- 可抽出：咖啡、甜點、安靜、適合工作、排隊等 tags
+- [createEntry.ts](/Users/wen/Documents/dev/blog/apps/api/src/discord/createEntry.ts)
 
----
+目前行為：
 
-## `/公開`
+- 自動正規化內容換行
+- 自動抽標題
+- 自動產生唯一 slug
+- 自動從內容抽 `#hashtag`
+- 建立 `entries`
+- 若有 hashtag，建立 `tags` 與 `entry_tags`
 
-### 用途
+## 附件處理流程
 
-把 draft / private 內容轉成 public。
+透過：
 
-### 欄位
+- [attachments.ts](/Users/wen/Documents/dev/blog/apps/api/src/discord/attachments.ts)
 
-- `entry_id` 或由互動卡觸發
+目前支援：
 
----
+- Markdown / text 附件讀成文字
+- 圖片附件上傳到 R2
+- 建 `cover` / `image` 類型資產
 
-## `/重跑ai`
+目前限制：
 
-### 用途
+- 多圖仍偏「補圖」流程，不是完整圖文後台
+- 圖片排序與顯示模式還沒有獨立 admin UI
 
-重新跑分類、tag、摘要。
+## 寫入的主要資料表
 
-### 欄位
+- `entries`
+- `tags`
+- `entry_tags`
+- `assets`
+- `user_profile`
+- `entry_metrics`
 
-- `entry_id`
+## 目前沒有的功能
 
----
+以下概念還在規劃中，尚未在 Discord 端落地：
 
-## 4. Message Commands
+- `/公開`
+- `/重跑ai`
+- `distribution_scope`
+- `post_style`
+- `display_mode`
+- 多人站點 / 多作者權限
+- Discord 直接進完整編輯後台
 
-## `存成貼文`
+## 更新 Discord 指令
 
-對一則訊息執行。
+本機註冊腳本：
 
-### 適合
+- [register-commands.ts](/Users/wen/Documents/dev/blog/apps/api/src/scripts/register-commands.ts)
 
-- 短日記
-- 即時感想
-- 小評論
+常用指令：
 
-### 行為
+```bash
+cd /Users/wen/Documents/dev/blog
+npm run register-commands --workspace=apps/api
+```
 
-- 讀取目標訊息內容
-- 存為 post
-- 保留 source_message_id
+需要的環境變數：
 
-## `存成文章`
+- `DISCORD_TOKEN`
+- `DISCORD_CLIENT_ID` 或 `DISCORD_APPLICATION_ID`
+- `DISCORD_GUILD_ID` 可選
 
-對一則訊息執行。
+## 下一步建議
 
-### 適合
+如果要往你規劃的「Discord 快入口 + web 輕後台」前進，Discord 規格下一步最值得做的是：
 
-- 長文
-- 記事本貼上內容
-- txt / md 附件
-
-### 行為
-
-- 讀取訊息文字或附件
-- 存為 article draft
-
-## `升格成文章`
-
-對既有貼文或來源訊息執行。
-
-### 行為
-
-- 根據內容建立新 article draft
-- 保留 relation：derived_from
-
----
-
-## 5. 回覆卡片規格
-
-### 成功存檔後
-
-Bot 應回一張 preview card：
-
-- 類型：貼文 / 文章
-- 分類：日記 / 讀書 / 旅行 / 地點
-- 標題：原標題或 AI 建議
-- tags：3~5 個
-- 狀態：draft / published / private
-- 入口：查看網站連結（若已公開）
-
-### 卡片按鈕
-
-- `公開`
-- `保持草稿`
-- `改分類`
-- `改標題`
-- `升格成文章`
-
----
-
-## 6. 長文處理策略
-
-### 原則
-
-不要把 modal 當唯一入口。
-
-### 短中篇
-
-- 用 slash command modal
-
-### 長文
-
-- 直接貼到 inbox 頻道
-- 或上傳 `.txt` / `.md`
-- 再使用 message command 存檔
-
-這樣可以避開單次表單輸入的壓力，也更接近真實寫作流程。
-
----
-
-## 7. 權限與頻道建議
-
-### 建議頻道
-
-- `#inbox`：貼上原始內容
-- `#bot-log`：只看 bot 存檔與錯誤
-- `#preview`：可選，用於回傳預覽
-
-### 權限
-
-- bot 可讀取 `#inbox`
-- bot 可回覆 interaction
-- 若未來只有你自己用，可先設私人伺服器
+1. 發文成功後回傳 web 編輯連結
+2. `/附圖` 支援更好的多圖流程
+3. 將 `tags` 從自由 hashtag 逐步過渡到結構化前綴
+4. 將 `post_style` / `distribution_scope` 正式納入建立與編輯流程

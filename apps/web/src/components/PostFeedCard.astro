@@ -52,9 +52,20 @@ const hasCover = Boolean(coverUrl)
 
   <!-- Cover image -->
   {hasCover && (
-    <a href={href} class="feed-image-wrap">
-      <img class="feed-cover" src={coverUrl} alt={coverAlt || ''} loading="lazy" />
-    </a>
+    <div class="feed-image-wrap">
+      <a href={href} class="feed-image-link">
+        <img class="feed-cover" src={coverUrl} alt={coverAlt || ''} loading="lazy" />
+      </a>
+      <button
+        class="feed-image-preview"
+        type="button"
+        data-preview-src={coverUrl}
+        data-preview-alt={coverAlt || title}
+        aria-label="預覽圖片"
+      >
+        預覽
+      </button>
+    </div>
   )}
 
   <!-- Footer: stats + read more -->
@@ -78,6 +89,42 @@ const hasCover = Boolean(coverUrl)
     <a href={href} class="feed-read-more">閱讀全文 →</a>
   </footer>
 </article>
+
+{hasCover && (
+  <div class="feed-lightbox" data-feed-lightbox hidden>
+    <button class="feed-lightbox-close" type="button" data-feed-lightbox-close aria-label="關閉圖片預覽">✕</button>
+    <div class="feed-lightbox-backdrop" data-feed-lightbox-close></div>
+    <img class="feed-lightbox-image" src={coverUrl} alt={coverAlt || title} />
+  </div>
+)}
+
+<script is:inline>
+  function initFeedPreview(root = document) {
+    root.querySelectorAll('.feed-image-preview').forEach((button) => {
+      if (!(button instanceof HTMLButtonElement) || button.dataset.bound === '1') return;
+      button.dataset.bound = '1';
+
+      const card = button.closest('.feed-card');
+      const lightbox = card?.nextElementSibling;
+      if (!(lightbox instanceof HTMLElement) || !lightbox.matches('[data-feed-lightbox]')) return;
+
+      const close = () => lightbox.setAttribute('hidden', '');
+
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        lightbox.removeAttribute('hidden');
+      });
+
+      lightbox.querySelectorAll('[data-feed-lightbox-close]').forEach((node) => {
+        if (!(node instanceof HTMLElement)) return;
+        node.addEventListener('click', close);
+      });
+    });
+  }
+
+  initFeedPreview();
+  document.addEventListener('astro:after-swap', () => initFeedPreview());
+</script>
 
 <style>
   .feed-card {
@@ -186,23 +233,90 @@ const hasCover = Boolean(coverUrl)
 
   /* ── Cover image ── */
   .feed-image-wrap {
-    display: block;
+    position: relative;
     width: 100%;
     overflow: hidden;
     border-top: 1px solid var(--border, #dddaf0);
+    background: #f7f7fb;
+  }
+
+  .feed-image-link {
+    display: block;
   }
 
   .feed-cover {
     width: 100%;
-    max-height: 300px;
-    object-fit: cover;
+    max-height: 320px;
+    object-fit: contain;
     display: block;
     transition: opacity 0.2s, transform 0.3s;
+    background: #f7f7fb;
   }
 
-  .feed-image-wrap:hover .feed-cover {
+  .feed-image-link:hover .feed-cover {
     opacity: 0.93;
     transform: scale(1.01);
+  }
+
+  .feed-image-preview {
+    position: absolute;
+    right: 0.8rem;
+    bottom: 0.8rem;
+    border: 1px solid rgba(216, 211, 238, 0.92);
+    background: rgba(255, 255, 255, 0.92);
+    color: #5b74c8;
+    border-radius: 999px;
+    padding: 0.35rem 0.72rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+
+  .feed-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 210;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+  }
+
+  .feed-lightbox[hidden] {
+    display: none;
+  }
+
+  .feed-lightbox-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(14, 13, 22, 0.78);
+  }
+
+  .feed-lightbox-image {
+    position: relative;
+    z-index: 1;
+    max-width: min(92vw, 900px);
+    max-height: 86vh;
+    width: auto;
+    height: auto;
+    border-radius: 14px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+    background: #fff;
+  }
+
+  .feed-lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 999px;
+    background: rgba(18, 18, 25, 0.55);
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
   }
 
   /* ── Footer ── */
@@ -260,6 +374,13 @@ const hasCover = Boolean(coverUrl)
 
     .feed-cover {
       max-height: 220px;
+    }
+
+    .feed-image-preview {
+      right: 0.6rem;
+      bottom: 0.6rem;
+      padding: 0.3rem 0.62rem;
+      font-size: 0.72rem;
     }
   }
 </style>

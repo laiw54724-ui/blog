@@ -2,11 +2,15 @@
 interface Props {
   title?: string
   description?: string
+  ogImage?: string
+  canonicalUrl?: string
 }
 
 const {
   title = '個人園地',
-  description = '動態留下當下，文章留下價值。'
+  description = '貼文留下當下，文章留下價值。',
+  ogImage = '/og-default.png',
+  canonicalUrl = Astro.url.href,
 } = Astro.props
 ---
 
@@ -17,13 +21,28 @@ const {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <title>{title}</title>
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="alternate" type="application/rss+xml" title="Double River RSS" href="/rss.xml" />
+
+    <!-- Preconnect for fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- OG / social -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="zh_TW" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
     <style is:global>
       * {
         margin: 0;
@@ -39,7 +58,22 @@ const {
         --surface: #fff;
         --text: #26253a;
         --text-muted: #8a88a8;
+        --serif: 'Noto Serif TC', Georgia, 'Times New Roman', serif;
       }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --accent: #7b93e0;
+          --accent-hover: #8fa5e8;
+          --accent-bg: #1e2340;
+          --border: #2e2c45;
+          --bg: #18172a;
+          --surface: #211f35;
+          --text: #e8e6f5;
+          --text-muted: #7a7898;
+        }
+      }
+
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
         line-height: 1.8;
@@ -67,12 +101,12 @@ const {
         background: var(--accent-hover);
       }
       .btn-secondary {
-        background: #f0f0f0;
-        color: #000;
-        border: 1px solid #ddd;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
       }
       .btn-secondary:hover {
-        background: #e0e0e0;
+        background: var(--accent-bg);
       }
     </style>
   </head>
@@ -81,8 +115,9 @@ const {
       <a href="/" class="logo">life<span class="logo-dot">·</span></a>
       <div class="nav-links">
         <a href="/about">關於</a>
-        <a href="/stream">動態</a>
+        <a href="/stream">貼文</a>
         <a href="/articles">文章</a>
+        <a href="/search">搜尋</a>
       </div>
       <button class="menu-toggle" id="menuToggle" aria-label="開啟選單">
         <span class="menu-icon"></span>
@@ -90,21 +125,27 @@ const {
     </nav>
 
     <!-- 側邊選單 -->
-    <div class="sidebar-overlay" id="sidebarOverlay"></div>
-    <aside class="sidebar" id="sidebar">
+    <div class="sidebar-overlay" id="sidebarOverlay" hidden></div>
+    <aside class="sidebar" id="sidebar" hidden>
       <button class="sidebar-close" id="sidebarClose" aria-label="關閉選單">&times;</button>
       <nav class="sidebar-nav">
         <a href="/">首頁</a>
         <a href="/about">關於</a>
-        <a href="/stream">動態</a>
+        <a href="/stream">貼文</a>
         <a href="/articles">文章</a>
-        <hr />
-        <a href="/c/journal">日記</a>
-        <a href="/c/reading">讀書</a>
-        <a href="/c/travel">旅行</a>
-        <a href="/c/place">地點</a>
+        <a href="/search">搜尋</a>
       </nav>
     </aside>
+
+    <!-- 浮動按鈕群：MENU + 回頂部 -->
+    <div class="float-actions" aria-label="快速操作">
+      <button class="float-btn float-scroll-top" id="scrollTopBtn" type="button" aria-label="回到頂部" hidden>
+        ↑
+      </button>
+      <button class="float-btn float-menu" id="menuRailToggle" type="button" aria-label="開啟選單">
+        MENU
+      </button>
+    </div>
 
     <main class="main-content">
       <slot />
@@ -117,13 +158,22 @@ const {
     <script>
       function initNavigation() {
         const menuToggle = document.getElementById('menuToggle');
+        const railToggle = document.getElementById('menuRailToggle');
+        const scrollTopBtn = document.getElementById('scrollTopBtn');
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const closeBtn = document.getElementById('sidebarClose');
+        const floatActions = document.querySelector('.float-actions');
+        const navbar = document.getElementById('navbar');
 
         function openSidebar() {
-          sidebar?.classList.add('open');
-          overlay?.classList.add('open');
+          if (window.innerWidth > 768) return;
+          overlay?.removeAttribute('hidden');
+          sidebar?.removeAttribute('hidden');
+          window.requestAnimationFrame(() => {
+            sidebar?.classList.add('open');
+            overlay?.classList.add('open');
+          });
           document.body.style.overflow = 'hidden';
         }
 
@@ -131,46 +181,96 @@ const {
           sidebar?.classList.remove('open');
           overlay?.classList.remove('open');
           document.body.style.overflow = '';
+          window.setTimeout(() => {
+            if (!sidebar?.classList.contains('open')) sidebar?.setAttribute('hidden', '');
+            if (!overlay?.classList.contains('open')) overlay?.setAttribute('hidden', '');
+          }, 220);
         }
 
-        menuToggle?.addEventListener('click', openSidebar);
-        overlay?.addEventListener('click', closeSidebar);
-        closeBtn?.addEventListener('click', closeSidebar);
+        if (menuToggle instanceof HTMLElement && menuToggle.dataset.bound !== '1') {
+          menuToggle.addEventListener('click', openSidebar);
+          menuToggle.dataset.bound = '1';
+        }
+
+        if (railToggle instanceof HTMLElement && railToggle.dataset.bound !== '1') {
+          railToggle.addEventListener('click', openSidebar);
+          railToggle.dataset.bound = '1';
+        }
+
+        if (overlay instanceof HTMLElement && overlay.dataset.bound !== '1') {
+          overlay.addEventListener('click', closeSidebar);
+          overlay.dataset.bound = '1';
+        }
+
+        if (closeBtn instanceof HTMLElement && closeBtn.dataset.bound !== '1') {
+          closeBtn.addEventListener('click', closeSidebar);
+          closeBtn.dataset.bound = '1';
+        }
 
         // 點連結後自動關閉
         sidebar?.querySelectorAll('a').forEach(link => {
-          link.addEventListener('click', closeSidebar);
-        });
-
-        // 標記目前頁面
-        const currentPath = window.location.pathname;
-        sidebar?.querySelectorAll('a').forEach(link => {
-          const href = link.getAttribute('href');
-          if (href === currentPath || (href !== '/' && currentPath.startsWith(href!))) {
-            link.classList.add('active');
+          if (link instanceof HTMLElement && link.dataset.bound !== '1') {
+            link.addEventListener('click', closeSidebar);
+            link.dataset.bound = '1';
           }
         });
 
-        // 頂部導覽滾動隱藏/顯示
+        closeSidebar();
+
+        // 標記目前頁面（sidebar + desktop nav）
+        const currentPath = window.location.pathname;
+        const markActive = (container: Element | null) => {
+          container?.querySelectorAll('a').forEach(link => {
+            const href = link.getAttribute('href');
+            const isActive = href === currentPath ||
+              (href !== '/' && currentPath.startsWith(href!));
+            link.classList.toggle('active', isActive);
+          });
+        };
+        markActive(document.getElementById('sidebar'));
+        markActive(document.querySelector('.nav-links'));
+
+        // 滾動：navbar 隱藏 / float-actions 淡出 / 回頂部按鈕顯示
         let lastScrollY = 0;
         let isHiding = false;
-        const navbar = document.getElementById('navbar');
 
-        document.addEventListener('scroll', () => {
+        const handleScroll = () => {
           const currentScrollY = window.scrollY;
-          if (currentScrollY > lastScrollY && currentScrollY > 100) {
-            if (!isHiding) {
-              navbar?.classList.add('hide');
-              isHiding = true;
-            }
-          } else if (currentScrollY < lastScrollY) {
-            if (isHiding) {
-              navbar?.classList.remove('hide');
-              isHiding = false;
+          const scrollingDown = currentScrollY > lastScrollY && currentScrollY > 100;
+
+          if (scrollingDown && !isHiding) {
+            navbar?.classList.add('hide');
+            floatActions?.classList.add('hide');
+            isHiding = true;
+          } else if (!scrollingDown && isHiding) {
+            navbar?.classList.remove('hide');
+            floatActions?.classList.remove('hide');
+            isHiding = false;
+          }
+
+          // 回頂部按鈕：手機版才顯示，滾超過 350px 才出現
+          if (window.innerWidth <= 768 && scrollTopBtn) {
+            if (currentScrollY > 350) {
+              scrollTopBtn.removeAttribute('hidden');
+            } else {
+              scrollTopBtn.setAttribute('hidden', '');
             }
           }
+
           lastScrollY = currentScrollY;
-        }, { passive: true });
+        };
+
+        if (document.body.dataset.navScrollBound !== '1') {
+          document.addEventListener('scroll', handleScroll, { passive: true });
+          document.body.dataset.navScrollBound = '1';
+        }
+
+        if (scrollTopBtn instanceof HTMLElement && scrollTopBtn.dataset.bound !== '1') {
+          scrollTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          });
+          scrollTopBtn.dataset.bound = '1';
+        }
       }
 
       initNavigation();
@@ -217,10 +317,28 @@ const {
       .nav-links a {
         color: var(--text-muted);
         transition: color 0.2s;
+        position: relative;
+        padding-bottom: 2px;
       }
 
       .nav-links a:hover {
         color: var(--text);
+      }
+
+      .nav-links a.active {
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      .nav-links a.active::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: var(--accent);
+        border-radius: 1px;
       }
 
       /* 漢堡選單按鈕 — 手機才顯示 */
@@ -260,7 +378,6 @@ const {
 
       /* ===== 側邊選單 ===== */
       .sidebar-overlay {
-        display: none;
         position: fixed;
         inset: 0;
         background: rgba(30, 28, 50, 0.35);
@@ -269,10 +386,7 @@ const {
         transition: opacity 0.3s;
       }
 
-      .sidebar-overlay.open {
-        display: block;
-        opacity: 1;
-      }
+      .sidebar-overlay.open { opacity: 1; }
 
       .sidebar {
         position: fixed;
@@ -284,7 +398,10 @@ const {
         background: var(--bg);
         z-index: 201;
         transform: translateX(100%);
-        transition: transform 0.3s ease-out;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: transform 0.3s ease-out, opacity 0.2s ease-out, visibility 0s linear 0.3s;
         padding: 2rem 1.5rem;
         overflow-y: auto;
         border-left: 1px solid var(--border);
@@ -292,6 +409,10 @@ const {
 
       .sidebar.open {
         transform: translateX(0);
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transition: transform 0.3s ease-out, opacity 0.2s ease-out;
       }
 
       .sidebar-close {
@@ -336,10 +457,43 @@ const {
         font-weight: 600;
       }
 
-      .sidebar-nav hr {
-        border: none;
-        border-top: 1px solid var(--border);
-        margin: 0.5rem 0;
+      /* ===== 浮動操作群 ===== */
+      .float-actions {
+        display: none;
+      }
+
+      .float-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        color: var(--accent);
+        box-shadow: 0 6px 20px rgba(91, 116, 200, 0.1);
+        cursor: pointer;
+        transition: opacity 0.18s ease, transform 0.18s ease, background 0.15s;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .float-btn:hover {
+        background: var(--accent-bg);
+        border-color: var(--accent);
+      }
+
+      .float-menu {
+        width: 52px;
+        height: 52px;
+        font-size: 0.62rem;
+        letter-spacing: 0.07em;
+        font-family: Georgia, serif;
+        font-weight: 600;
+      }
+
+      .float-scroll-top {
+        width: 44px;
+        height: 44px;
+        font-size: 1.1rem;
       }
 
       /* ===== 主內容 ===== */
@@ -379,6 +533,24 @@ const {
           display: block;
         }
 
+        .float-actions {
+          position: fixed;
+          right: 1rem;
+          bottom: 1.25rem;
+          z-index: 110;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.5rem;
+          transition: opacity 0.18s ease, transform 0.18s ease;
+        }
+
+        .float-actions.hide {
+          opacity: 0.1;
+          transform: translateY(8px) scale(0.95);
+          pointer-events: none;
+        }
+
         .navbar {
           padding: 1rem 1.25rem;
         }
@@ -389,8 +561,13 @@ const {
       }
 
       @media (min-width: 769px) {
+        .menu-toggle {
+          display: none;
+        }
+
         .sidebar,
-        .sidebar-overlay {
+        .sidebar-overlay,
+        .float-actions {
           display: none !important;
         }
       }

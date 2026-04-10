@@ -15,7 +15,8 @@
       "Bash(npx --yes astro build)",
       "Bash(ls /Users/wen/Documents/dev/blog/*.config.ts)",
       "Bash(ls /Users/wen/Documents/dev/blog/apps/api/.env*)",
-      "Bash(DISCORD_APPLICATION_ID=1491052368626843668 npx tsx src/scripts/register-commands.ts)"
+      "Bash(DISCORD_APPLICATION_ID=1491052368626843668 npx tsx src/scripts/register-commands.ts)",
+      "Bash(npm test:*)"
     ]
   }
 }

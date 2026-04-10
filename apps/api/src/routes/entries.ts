@@ -5,7 +5,8 @@ import { UpdateEntrySchema } from '@personal-blog/shared/schema';
 import {
   getEntries,
   getEntryById,
-  getEntryBySlug,
+  getPublicEntryById,
+  getPublicEntryBySlug,
   updateEntry,
   archiveEntry,
   deleteEntry,
@@ -28,12 +29,16 @@ interface EntryMetricRow {
 
 const router = new Hono<{ Bindings: Env }>();
 
-// GET /api/entries - List entries
-router.get('/', async (c) => {
-  const db = c.env?.DB;
-  if (!db) {
+router.use('*', async (c, next) => {
+  if (!c.env?.DB) {
     return c.json({ error: 'Database not configured' }, 500);
   }
+  await next();
+});
+
+// GET /api/entries - List entries
+router.get('/', async (c) => {
+  const db = c.env.DB;
 
   const entryType = c.req.query('type');
   const category = c.req.query('category');
@@ -61,8 +66,7 @@ router.get('/', async (c) => {
 
 // GET /api/entries/metrics?ids=id1,id2,... - Batch fetch metrics (fixes N+1)
 router.get('/metrics', async (c) => {
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: 'Database not configured' }, 500);
+  const db = c.env.DB;
 
   const raw = c.req.query('ids') || '';
   const ids = raw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50);
@@ -95,8 +99,7 @@ router.get('/metrics', async (c) => {
 
 // GET /api/entries/assets?ids=id1,id2,... - Batch fetch assets (fixes N+1)
 router.get('/assets', async (c) => {
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: 'Database not configured' }, 500);
+  const db = c.env.DB;
 
   const raw = c.req.query('ids') || '';
   const ids = raw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50);
@@ -126,8 +129,7 @@ router.get('/assets', async (c) => {
 
 // GET /api/entries/search?q=keyword
 router.get('/search', async (c) => {
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: 'Database not configured' }, 500);
+  const db = c.env.DB;
 
   const q = (c.req.query('q') || '').trim();
   if (!q) return c.json({ data: [], count: 0 });
@@ -158,16 +160,12 @@ router.get('/search', async (c) => {
 
 // GET /api/entries/slug/:slug - Get entry by slug
 router.get('/slug/:slug', async (c) => {
-  const db = c.env?.DB;
-  if (!db) {
-    return c.json({ error: 'Database not configured' }, 500);
-  }
+  const db = c.env.DB;
 
   const slug = c.req.param('slug');
-  const visibility = c.req.query('visibility') || 'public';
 
   try {
-    const entry = await getEntryBySlug(db, slug, visibility);
+    const entry = await getPublicEntryBySlug(db, slug);
     if (!entry) {
       return c.json({ error: 'Entry not found' }, 404);
     }
@@ -180,15 +178,12 @@ router.get('/slug/:slug', async (c) => {
 
 // GET /api/entries/:id - Get single entry
 router.get('/:id', async (c) => {
-  const db = c.env?.DB;
-  if (!db) {
-    return c.json({ error: 'Database not configured' }, 500);
-  }
+  const db = c.env.DB;
 
   const id = c.req.param('id');
 
   try {
-    const entry = await getEntryById(db, id);
+    const entry = await getPublicEntryById(db, id);
     if (!entry) {
       return c.json({ error: 'Entry not found' }, 404);
     }
@@ -201,10 +196,7 @@ router.get('/:id', async (c) => {
 
 // GET /api/entries/:id/assets - Get assets for an entry
 router.get('/:id/assets', async (c) => {
-  const db = c.env?.DB;
-  if (!db) {
-    return c.json({ error: 'Database not configured' }, 500);
-  }
+  const db = c.env.DB;
 
   const id = c.req.param('id');
 
@@ -219,8 +211,7 @@ router.get('/:id/assets', async (c) => {
 
 // GET /api/entries/:id/metrics
 router.get('/:id/metrics', async (c) => {
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: 'Database not configured' }, 500);
+  const db = c.env.DB;
 
   const id = c.req.param('id');
 
@@ -259,10 +250,7 @@ router.put('/:id', async (c) => {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  const db = c.env?.DB;
-  if (!db) {
-    return c.json({ error: 'Database not configured' }, 500);
-  }
+  const db = c.env.DB;
 
   const id = c.req.param('id');
 
@@ -297,10 +285,7 @@ router.delete('/:id', async (c) => {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  const db = c.env?.DB;
-  if (!db) {
-    return c.json({ error: 'Database not configured' }, 500);
-  }
+  const db = c.env.DB;
 
   const id = c.req.param('id');
 
@@ -323,10 +308,7 @@ router.delete('/:id/hard', async (c) => {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  const db = c.env?.DB;
-  if (!db) {
-    return c.json({ error: 'Database not configured' }, 500);
-  }
+  const db = c.env.DB;
 
   const id = c.req.param('id');
 
@@ -346,8 +328,7 @@ router.delete('/:id/hard', async (c) => {
 
 // POST /api/entries/:id/clap - increment clap count (anonymous)
 router.post('/:id/clap', async (c) => {
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: 'Database not configured' }, 500);
+  const db = c.env.DB;
 
   const id = c.req.param('id');
   try {
@@ -381,8 +362,7 @@ router.post('/:id/clap', async (c) => {
 
 // POST /api/entries/:id/view - increment view count
 router.post('/:id/view', async (c) => {
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: 'Database not configured' }, 500);
+  const db = c.env.DB;
 
   const id = c.req.param('id');
   try {

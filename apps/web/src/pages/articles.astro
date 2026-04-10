@@ -1,21 +1,19 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
-import { getArticles, getProfile } from '../lib/data'
-import { buildEntryCardModels, CATEGORY_LABELS } from '../lib/presenters'
+import { getArticles, getPopularTags, getProfile } from '../lib/data'
+import { buildEntryCardModels, splitTagSummaryGroups } from '../lib/presenters'
 import { applyPageCacheHeaders } from '../lib/response'
+import { SERIES_DEFINITIONS } from '../lib/series'
 
-const [articles, profile] = await Promise.all([
+const [articles, popularTags, profile] = await Promise.all([
   getArticles(),
+  getPopularTags({ type: 'article', limit: 16 }),
   getProfile(),
 ])
 
 const articleModels = await buildEntryCardModels(articles, { excerptLength: 150 })
 const latestArticles = articleModels.slice(0, 7)
-const categoryCounts = articles.reduce<Record<string, number>>((acc, article) => {
-  acc[article.category] = (acc[article.category] || 0) + 1
-  return acc
-}, {})
-
+const groupedPopularTags = splitTagSummaryGroups(popularTags)
 applyPageCacheHeaders(Astro.response, 'articles')
 ---
 
@@ -25,7 +23,20 @@ applyPageCacheHeaders(Astro.response, 'articles')
       <p class="articles-kicker">category index</p>
       <h1>文章</h1>
       <p class="articles-desc">整理過、值得回頭翻找的長文、心得與評論。</p>
+      <div class="articles-actions">
+        <a href="/search?type=article" class="articles-search-link">搜尋文章</a>
+      </div>
     </header>
+
+    <section class="series-grid" aria-label="專題入口">
+      {SERIES_DEFINITIONS.map((series) => (
+        <a href={`/series/${series.slug}`} class="series-card">
+          <span class="series-card-kicker">{series.kicker}</span>
+          <h2>{series.title}</h2>
+          <p>{series.description}</p>
+        </a>
+      ))}
+    </section>
 
     <div class="articles-layout">
       <section class="articles-main" aria-label="文章清單">
@@ -35,7 +46,6 @@ applyPageCacheHeaders(Astro.response, 'articles')
               <a href={vm.href} class="article-index-link">
                 <div class="article-index-meta">
                   <time datetime={vm.rawDate}>{vm.displayDate}</time>
-                  <span class="article-index-category">{vm.categoryLabel}</span>
                 </div>
                 <h2>{vm.displayTitle}</h2>
                 <p class="article-index-excerpt">{vm.displayExcerpt}</p>
@@ -72,19 +82,52 @@ applyPageCacheHeaders(Astro.response, 'articles')
           </ul>
         </section>
 
-        <section class="sidebar-card">
-          <div class="sidebar-title">文章類別</div>
-          <ul class="sidebar-category-list">
-            {Object.entries(categoryCounts).map(([category, count]) => (
-              <li>
-                <a href={`/c/${category}`}>
-                  <span>{CATEGORY_LABELS[category] || category}</span>
-                  <span>{count}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {popularTags.length > 0 && (
+          <section class="sidebar-card">
+            <div class="sidebar-title sidebar-title-with-link">
+              <span>熱門標籤</span>
+              <a href="/tags">全部標籤</a>
+            </div>
+            <div class="sidebar-tag-groups">
+              {groupedPopularTags.structured.length > 0 && (
+                <section class="sidebar-tag-section">
+                  <p class="sidebar-tag-section-kicker">structured tags</p>
+                  {groupedPopularTags.structured.map((group) => (
+                    <section class="sidebar-tag-group">
+                      <h3>{group.label}</h3>
+                      <div class="sidebar-tag-cloud">
+                        {group.tags.map((tag) => (
+                          <a href={`/tags/${tag.slug}`} class="sidebar-tag">
+                            <span>#{tag.normalizedLabel}</span>
+                            <span>{tag.entry_count}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </section>
+              )}
+              {groupedPopularTags.free.length > 0 && (
+                <section class="sidebar-tag-section">
+                  <p class="sidebar-tag-section-kicker">free tags</p>
+                  {groupedPopularTags.free.map((group) => (
+                    <section class="sidebar-tag-group">
+                      <h3>{group.label}</h3>
+                      <div class="sidebar-tag-cloud">
+                        {group.tags.map((tag) => (
+                          <a href={`/tags/${tag.slug}`} class="sidebar-tag sidebar-tag-free">
+                            <span>#{tag.normalizedLabel}</span>
+                            <span>{tag.entry_count}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </section>
+              )}
+            </div>
+          </section>
+        )}
       </aside>
     </div>
   </div>
@@ -126,11 +169,69 @@ applyPageCacheHeaders(Astro.response, 'articles')
     line-height: 1.7;
   }
 
+  .articles-actions {
+    margin-top: 1rem;
+  }
+
+  .articles-search-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.62rem 1rem;
+    border: 1px solid #d9d6ef;
+    border-radius: 999px;
+    color: #5164b6;
+    background: rgba(255, 255, 255, 0.85);
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  .articles-search-link:hover {
+    background: #eef2ff;
+    border-color: #cbd4f5;
+  }
+
   .articles-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
     gap: 3rem;
     align-items: start;
+  }
+
+  .series-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.6rem;
+  }
+
+  .series-card {
+    padding: 1rem 1.05rem;
+    border: 1px solid #dddaf0;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: 0 10px 28px rgba(94, 95, 150, 0.06);
+  }
+
+  .series-card-kicker {
+    display: block;
+    margin-bottom: 0.45rem;
+    color: #8f89b2;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .series-card h2 {
+    margin: 0 0 0.45rem;
+    font-size: 1.1rem;
+  }
+
+  .series-card p {
+    margin: 0;
+    color: #696481;
+    line-height: 1.65;
+    font-size: 0.9rem;
   }
 
   .articles-main {
@@ -153,11 +254,6 @@ applyPageCacheHeaders(Astro.response, 'articles')
     margin-bottom: 0.55rem;
     color: #908ba8;
     font-size: 0.95rem;
-  }
-
-  .article-index-category {
-    color: #4e6fcc;
-    font-weight: 600;
   }
 
   .article-index-item h2 {
@@ -233,6 +329,20 @@ applyPageCacheHeaders(Astro.response, 'articles')
     letter-spacing: 0.08em;
   }
 
+  .sidebar-title-with-link {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+
+  .sidebar-title-with-link a {
+    color: #5164b6;
+    font-size: 0.8rem;
+    letter-spacing: normal;
+    font-weight: 600;
+  }
+
   .sidebar-list,
   .sidebar-category-list {
     list-style: none;
@@ -270,6 +380,61 @@ applyPageCacheHeaders(Astro.response, 'articles')
     color: #4b6fc8;
   }
 
+  .sidebar-tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+  }
+
+  .sidebar-tag-groups {
+    display: grid;
+    gap: 0.95rem;
+  }
+
+  .sidebar-tag-section {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .sidebar-tag-section-kicker {
+    margin: 0;
+    color: #8f89b2;
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .sidebar-tag-group h3 {
+    margin: 0 0 0.55rem;
+    font-size: 0.74rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #8f89b2;
+  }
+
+  .sidebar-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.42rem 0.72rem;
+    border-radius: 999px;
+    border: 1px solid #ddd8f1;
+    color: #54506d;
+    background: #fff;
+    font-size: 0.84rem;
+  }
+
+  .sidebar-tag:hover {
+    color: #4b6fc8;
+    border-color: #cdd6f2;
+    background: #f7f9ff;
+  }
+
+  .sidebar-tag-free {
+    border-style: dashed;
+    background: #fffdf9;
+  }
+
   .empty-state {
     text-align: center;
     color: #999;
@@ -277,6 +442,10 @@ applyPageCacheHeaders(Astro.response, 'articles')
   }
 
   @media (max-width: 900px) {
+    .series-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .articles-layout {
       grid-template-columns: 1fr;
       gap: 1.5rem;
@@ -290,6 +459,10 @@ applyPageCacheHeaders(Astro.response, 'articles')
   @media (max-width: 640px) {
     .articles-shell {
       padding: 1.25rem 1rem;
+    }
+
+    .series-grid {
+      grid-template-columns: 1fr;
     }
 
     .article-index-item {

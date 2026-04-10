@@ -21,10 +21,16 @@ interface CreateCommentBody {
 
 const router = new Hono<{ Bindings: Env }>();
 
+router.use('*', async (c, next) => {
+  if (!c.env?.DB) {
+    return c.json({ error: 'Database not configured' }, 500);
+  }
+  await next();
+});
+
 // GET /api/entries/:id/comments
 router.get('/', async (c) => {
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: 'Database not configured' }, 500);
+  const db = c.env.DB;
 
   const entryId = c.req.param('id');
   if (!entryId) return c.json({ error: 'Missing entry id' }, 400);
@@ -43,8 +49,7 @@ router.get('/', async (c) => {
 
 // POST /api/entries/:id/comments
 router.post('/', async (c) => {
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: 'Database not configured' }, 500);
+  const db = c.env.DB;
 
   const entryId = c.req.param('id');
   if (!entryId) return c.json({ error: 'Missing entry id' }, 400);

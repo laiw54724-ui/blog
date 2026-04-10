@@ -25,7 +25,7 @@ export function generateId(prefix: string): string {
  * Extract #hashtags from content text.
  */
 export function extractHashtags(text: string): string[] {
-  const matches = text.match(/#([\p{L}\p{N}_]+)/gu) ?? [];
+  const matches = text.match(/#([\p{L}\p{N}_:-]+)/gu) ?? [];
   return matches.map((t) => t.slice(1).toLowerCase());
 }
 

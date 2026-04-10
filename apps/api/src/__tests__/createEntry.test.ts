@@ -89,6 +89,35 @@ describe('createEntryFromCommand', () => {
     expect(tagInsertSql ?? entryTagSql).toBeDefined();
   });
 
+  it('normalizes structured hashtags before storing', async () => {
+    const db = createMockDb({ firstResult: null });
+    await createEntryFromCommand(db, {
+      preset: postPreset,
+      content: '今天在校園裡聊 BL 作品 #BL #校園',
+    });
+
+    const tagInsertCalls = db._statement.bind.mock.calls.filter((call: any[]) =>
+      call.length === 3 && typeof call[2] === 'string'
+    );
+
+    expect(tagInsertCalls.some((call: any[]) => call[2] === 'genre:bl')).toBe(true);
+    expect(tagInsertCalls.some((call: any[]) => call[2] === 'setting:campus')).toBe(true);
+  });
+
+  it('adds preset default structured tags', async () => {
+    const db = createMockDb({ firstResult: null });
+    await createEntryFromCommand(db, {
+      preset: travelPreset,
+      content: '抵達京都！',
+    });
+
+    const tagInsertCalls = db._statement.bind.mock.calls.filter((call: any[]) =>
+      call.length === 3 && typeof call[2] === 'string'
+    );
+
+    expect(tagInsertCalls.some((call: any[]) => call[2] === 'setting:travel')).toBe(true);
+  });
+
   it('skips tag creation when no hashtags in content', async () => {
     const db = createMockDb({ firstResult: null });
     await createEntryFromCommand(db, {
@@ -112,6 +141,34 @@ describe('createEntryFromCommand', () => {
     expect(insertSql).toBeDefined();
     const params = db._statement.bind.mock.calls.find((call: any[]) => call.includes('travel'));
     expect(params).toBeDefined();
+  });
+
+  it('uses provided excerpt, tags, status, and visibility overrides', async () => {
+    const db = createMockDb({ firstResult: null });
+    const result = await createEntryFromCommand(db, {
+      preset: articlePreset,
+      title: 'Override Article',
+      content: '正文內容',
+      excerpt: '自訂摘要',
+      extraTags: 'proof, tone:quiet',
+      status: 'published',
+      visibility: 'unlisted',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.message).toContain('published');
+    expect(result.message).toContain('unlisted');
+
+    const insertEntryCall = db._statement.bind.mock.calls.find((call: any[]) =>
+      call.includes('自訂摘要') && call.includes('published') && call.includes('unlisted')
+    );
+    expect(insertEntryCall).toBeDefined();
+
+    const tagInsertCalls = db._statement.bind.mock.calls.filter((call: any[]) =>
+      call.length === 3 && typeof call[2] === 'string'
+    );
+    expect(tagInsertCalls.some((call: any[]) => call[2] === 'topic:proof')).toBe(true);
+    expect(tagInsertCalls.some((call: any[]) => call[2] === 'tone:quiet')).toBe(true);
   });
 
   it('applies travel preset fields correctly', async () => {

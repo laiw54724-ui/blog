@@ -9,7 +9,7 @@ import type { CommandPreset } from '../presets';
 /** Discord Modal response (type 9) */
 export function openCreateModal(preset: CommandPreset, commandKey: string) {
   const titles: Record<string, string> = {
-    post: '新增動態',
+    post: '新增貼文',
     article: '新增文章',
     travel: '新增旅記',
     reading: '新增書摘',
@@ -39,6 +39,48 @@ export function openCreateModal(preset: CommandPreset, commandKey: string) {
               required: false,
               max_length: 200,
               placeholder: '留空會自動從內容擷取',
+            },
+          ],
+        },
+        {
+          type: 1,
+          components: [
+            {
+              type: 4,
+              custom_id: 'excerpt',
+              label: '摘要 / 備註（選填）',
+              style: 1,
+              required: false,
+              max_length: 180,
+              placeholder: '留空會自動從內容擷取',
+            },
+          ],
+        },
+        {
+          type: 1,
+          components: [
+            {
+              type: 4,
+              custom_id: 'publish_mode',
+              label: '發佈設定（draft / public / unlisted / private）',
+              style: 1,
+              required: false,
+              max_length: 20,
+              placeholder: `${preset.status === 'published' ? preset.visibility : 'draft'}`,
+            },
+          ],
+        },
+        {
+          type: 1,
+          components: [
+            {
+              type: 4,
+              custom_id: 'tags',
+              label: '標籤（選填，逗號或空白分隔）',
+              style: 1,
+              required: false,
+              max_length: 200,
+              placeholder: '#proof setting:travel mood, note',
             },
           ],
         },

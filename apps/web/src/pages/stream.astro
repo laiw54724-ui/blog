@@ -1,73 +1,104 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
 import PostFeedCard from '../components/PostFeedCard.astro'
-import SystemNoticeCard from '../components/SystemNoticeCard.astro'
-import { getPosts, getArticles, getProfile } from '../lib/data'
+import { getPosts, getProfile } from '../lib/data'
 import { buildEntryCardModels } from '../lib/presenters'
-import { buildUnifiedFeed, isSystemNotice } from '../lib/feed'
 import { applyPageCacheHeaders } from '../lib/response'
 
-const [allPosts, allArticles, profile] = await Promise.all([
+const [allPosts, profile] = await Promise.all([
   getPosts(),
-  getArticles(),
   getProfile(),
 ])
 
-const [postModels, articleModels] = await Promise.all([
-  buildEntryCardModels(allPosts, { excerptLength: 100 }),
-  buildEntryCardModels(allArticles, { excerptLength: 120 }),
-])
-
-const dayGroups = buildUnifiedFeed(postModels, articleModels)
+const postModels = await buildEntryCardModels(allPosts, { excerptLength: 100 })
 
 applyPageCacheHeaders(Astro.response, 'stream')
 ---
 
-<BaseLayout title="動態 | Double River" description="像社群河道一樣，收納當下的片段。">
+<BaseLayout title="貼文 | Double River" description="收納當下的片段、短記和最近更新。">
   <div class="stream-container">
     <header class="stream-header">
-      <h1>動態</h1>
-      <p>日常短記、書摘、旅途感想</p>
+      <h1>貼文</h1>
+      <p>最近的短記、想法、圖片和小更新。</p>
     </header>
 
-    <div class="timeline">
+    <div class="posts-list" id="postsList">
       {
-        dayGroups.length > 0 ? (
-          dayGroups.map((group) => (
-            <section class="day-group">
-              <div class="day-label">
-                <span>{group.displayDate}</span>
-              </div>
-
-              <div class="day-items">
-                {group.items.map((item) =>
-                  isSystemNotice(item) ? (
-                    <SystemNoticeCard message={item.message} href={item.href} />
-                  ) : (
-                    <PostFeedCard
-                      href={item.href}
-                      title={item.displayTitle}
-                      excerpt={item.displayExcerpt}
-                      date={item.displayDate}
-                      displayName={profile.name}
-                      avatarUrl={profile.avatar_url}
-                      categoryLabel={item.categoryLabel}
-                      coverUrl={item.coverUrl}
-                      coverAlt={item.coverAlt}
-                      stats={item.metrics}
-                    />
-                  )
-                )}
-              </div>
-            </section>
+        postModels.length > 0 ? (
+          postModels.map((item, i) => (
+            <div class="post-item" data-index={i} hidden={i >= 10 ? true : undefined}>
+              <PostFeedCard
+                href={item.href}
+                title={item.displayTitle}
+                excerpt={item.displayExcerpt}
+                date={item.displayDate}
+                displayName={profile.name}
+                avatarUrl={profile.avatar_url}
+                coverUrl={item.coverUrl}
+                coverAlt={item.coverAlt}
+                stats={item.metrics}
+              />
+            </div>
           ))
         ) : (
           <p class="empty-state">還沒有任何貼文</p>
         )
       }
     </div>
+
+    {postModels.length > 10 && (
+      <div class="load-more-wrap" id="loadMoreWrap">
+        <button class="load-more-btn" id="loadMoreBtn" type="button">
+          載入更多
+          <span class="load-more-count" id="loadMoreCount">
+            （還有 {postModels.length - 10} 則）
+          </span>
+        </button>
+      </div>
+    )}
   </div>
 </BaseLayout>
+
+<script>
+  function initLoadMore() {
+    const btn = document.getElementById('loadMoreBtn');
+    const wrap = document.getElementById('loadMoreWrap');
+    const countEl = document.getElementById('loadMoreCount');
+    if (!btn || !wrap) return;
+
+    const PAGE_SIZE = 10;
+    let shown = document.querySelectorAll('.post-item:not([hidden])').length;
+
+    const updateCount = () => {
+      const total = document.querySelectorAll('.post-item').length;
+      const remaining = total - shown;
+      if (remaining <= 0) {
+        wrap.setAttribute('hidden', '');
+      } else if (countEl) {
+        countEl.textContent = `（還有 ${remaining} 則）`;
+      }
+    };
+
+    if (btn.dataset.bound !== '1') {
+      btn.addEventListener('click', () => {
+        const items = document.querySelectorAll('.post-item[hidden]');
+        let revealed = 0;
+        items.forEach((item) => {
+          if (revealed < PAGE_SIZE) {
+            item.removeAttribute('hidden');
+            revealed++;
+            shown++;
+          }
+        });
+        updateCount();
+      });
+      btn.dataset.bound = '1';
+    }
+  }
+
+  initLoadMore();
+  document.addEventListener('astro:after-swap', initLoadMore);
+</script>
 
 <style>
   .stream-container {
@@ -92,34 +123,7 @@ applyPageCacheHeaders(Astro.response, 'stream')
     font-size: 0.95rem;
   }
 
-  .timeline {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .day-group {
-    margin-bottom: 0.5rem;
-  }
-
-  .day-label {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 0;
-    color: #888;
-    font-size: 0.85rem;
-    font-weight: 500;
-  }
-
-  .day-label::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: #e5e0d8;
-  }
-
-  .day-items {
+  .posts-list {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -129,6 +133,42 @@ applyPageCacheHeaders(Astro.response, 'stream')
     text-align: center;
     color: #999;
     padding: 3rem;
+  }
+
+  .post-item {
+    display: contents;
+  }
+
+  .post-item[hidden] {
+    display: none;
+  }
+
+  .load-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+  }
+
+  .load-more-btn {
+    padding: 0.7rem 1.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .load-more-btn:hover {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+  }
+
+  .load-more-count {
+    color: var(--text-muted);
+    font-weight: 400;
   }
 
   @media (max-width: 640px) {

@@ -1,13 +1,14 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
 import EntryCard from '../components/EntryCard.astro'
-import { getPosts, getArticles } from '../lib/data'
+import { getPosts, getArticles, getProfile } from '../lib/data'
 import { buildEntryCardModels } from '../lib/presenters'
 import { applyPageCacheHeaders } from '../lib/response'
 
-const [allPosts, allArticles] = await Promise.all([
+const [allPosts, allArticles, profile] = await Promise.all([
   getPosts(),
   getArticles(),
+  getProfile(),
 ])
 
 const [postModels, articleModels] = await Promise.all([
@@ -18,29 +19,64 @@ const [postModels, articleModels] = await Promise.all([
 applyPageCacheHeaders(Astro.response, 'stream')
 ---
 
-<BaseLayout title="Double River" description="動態留下當下，文章留下價值。">
-  <section class="hero">
-    <h1>個人園地</h1>
-    <p>記錄每一刻的想法、旅程與發現</p>
-    <div class="cta-group">
-      <a href="/stream" class="btn btn-primary">看最新動態</a>
-      <a href="/articles" class="btn btn-secondary">看整理文章</a>
+<BaseLayout title="Double River" description="貼文留下當下，文章留下價值。">
+  <section class="home-hero">
+    <div class="home-hero-copy">
+      <p class="hero-kicker">life archive</p>
+      <h1>{profile.name || 'life·'}</h1>
+      <p class="hero-description">
+        {profile.bio || '把當下先收進貼文，把值得回頭翻找的內容整理成文章。'}
+      </p>
+      <div class="cta-group">
+        <a href="/about" class="btn btn-primary">先看關於</a>
+        <a href="/stream" class="btn btn-secondary">直接進貼文</a>
+      </div>
+    </div>
+
+    <div class="home-summary-card">
+      <p class="summary-label">這裡現在有</p>
+      <div class="summary-stats">
+        <a href="/stream" class="summary-stat">
+          <strong>{allPosts.length}</strong>
+          <span>則貼文</span>
+        </a>
+        <a href="/articles" class="summary-stat">
+          <strong>{allArticles.length}</strong>
+          <span>篇文章</span>
+        </a>
+      </div>
+      <div class="summary-links">
+        <a href="/search">搜尋內容</a>
+        <a href="/articles">閱讀文章</a>
+      </div>
     </div>
   </section>
 
-  <section class="home-feed">
-    <div class="feed-column">
-      <h2>最新動態</h2>
+  <section class="home-sections">
+    <a href="/about" class="home-panel home-panel-about">
+      <span class="panel-kicker">about</span>
+      <h2>先認識這個地方</h2>
+      <p>如果你想先知道這裡是怎麼使用、平常會寫什麼，從關於頁開始最順。</p>
+      <span class="panel-link">前往關於 →</span>
+    </a>
+
+    <section class="home-panel">
+      <div class="panel-head">
+        <div>
+          <span class="panel-kicker">recent posts</span>
+          <h2>最新貼文</h2>
+        </div>
+        <a href="/stream" class="panel-link">全部貼文 →</a>
+      </div>
       <div class="feed-list">
         {
           postModels.length > 0 ? (
-            postModels.map((vm) => (
+            postModels.slice(0, 4).map((vm) => (
               <EntryCard
                 href={vm.href}
                 title={vm.displayTitle}
                 excerpt={vm.displayExcerpt}
                 date={vm.displayDate}
-                categoryLabel={vm.categoryLabel}
                 coverUrl={vm.coverUrl}
                 coverAlt={vm.coverAlt}
                 stats={vm.metrics}
@@ -48,25 +84,29 @@ applyPageCacheHeaders(Astro.response, 'stream')
               />
             ))
           ) : (
-            <p>還沒有動態</p>
+            <p class="empty-state">還沒有貼文</p>
           )
         }
       </div>
-      <a href="/stream" class="view-all">查看全部 →</a>
-    </div>
+    </section>
 
-    <div class="feed-column">
-      <h2>最新文章</h2>
+    <section class="home-panel">
+      <div class="panel-head">
+        <div>
+          <span class="panel-kicker">recent essays</span>
+          <h2>最新文章</h2>
+        </div>
+        <a href="/articles" class="panel-link">全部文章 →</a>
+      </div>
       <div class="feed-list">
         {
           articleModels.length > 0 ? (
-            articleModels.map((vm) => (
+            articleModels.slice(0, 4).map((vm) => (
               <EntryCard
                 href={vm.href}
                 title={vm.displayTitle}
                 excerpt={vm.displayExcerpt}
                 date={vm.displayDate}
-                categoryLabel={vm.categoryLabel}
                 coverUrl={vm.coverUrl}
                 coverAlt={vm.coverAlt}
                 stats={vm.metrics}
@@ -74,151 +114,187 @@ applyPageCacheHeaders(Astro.response, 'stream')
               />
             ))
           ) : (
-            <p>還沒有文章</p>
+            <p class="empty-state">還沒有文章</p>
           )
         }
       </div>
-      <a href="/articles" class="view-all">查看全部 →</a>
-    </div>
-  </section>
-
-  <section class="categories">
-    <h2>探索</h2>
-    <div class="category-grid">
-      <a href="/c/journal" class="category-card">
-        <h3>📓 日記</h3>
-        <p>日常思考與感受</p>
-      </a>
-      <a href="/c/reading" class="category-card">
-        <h3>📚 讀書</h3>
-        <p>書籍與想法</p>
-      </a>
-      <a href="/c/travel" class="category-card">
-        <h3>✈️ 旅行</h3>
-        <p>世界的故事</p>
-      </a>
-      <a href="/c/place" class="category-card">
-        <h3>☕ 地點</h3>
-        <p>咖啡廳與餐廳</p>
-      </a>
-    </div>
+    </section>
   </section>
 </BaseLayout>
 
 <style>
-  .hero {
-    text-align: center;
-    padding: 4rem 2rem;
+  .home-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+    gap: 1.5rem;
+    align-items: stretch;
+    margin-bottom: 1.75rem;
   }
 
-  .hero h1 {
-    font-size: 3rem;
-    margin-bottom: 1rem;
+  .home-hero-copy,
+  .home-summary-card,
+  .home-panel {
+    border: 1px solid #dddaf0;
+    border-radius: 24px;
+    background:
+      radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.78)),
+      linear-gradient(180deg, rgba(238, 241, 251, 0.75), rgba(255, 255, 255, 0.92));
+    box-shadow: 0 18px 48px rgba(91, 116, 200, 0.08);
   }
 
-  .hero p {
-    font-size: 1.2rem;
-    color: #666;
-    margin-bottom: 2rem;
+  .home-hero-copy {
+    padding: 2.4rem 2.2rem;
+  }
+
+  .hero-kicker,
+  .panel-kicker,
+  .summary-label {
+    margin: 0 0 0.55rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #8f89b2;
+  }
+
+  .home-hero-copy h1 {
+    margin: 0 0 0.75rem;
+    font-size: clamp(2.5rem, 6vw, 4.6rem);
+    line-height: 0.95;
+    letter-spacing: -0.05em;
+  }
+
+  .hero-description {
+    max-width: 34rem;
+    margin: 0;
+    font-size: 1.02rem;
+    line-height: 1.8;
+    color: #66627b;
   }
 
   .cta-group {
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
-    justify-content: center;
+    margin-top: 1.5rem;
   }
 
-  .home-feed {
+  .home-summary-card {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .summary-stats {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: 3rem 2rem;
-    gap: 3rem;
+    gap: 0.9rem;
+    margin: 0.4rem 0 1.1rem;
   }
 
-  .feed-column h2 {
-    font-size: 1.5rem;
-    margin-bottom: 1.5rem;
+  .summary-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 1rem 1.05rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid #e1def1;
+  }
+
+  .summary-stat strong {
+    font-size: 2rem;
+    line-height: 1;
+    color: #2a2940;
+  }
+
+  .summary-stat span {
+    color: #7a7592;
+    font-size: 0.92rem;
+  }
+
+  .summary-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+  }
+
+  .summary-links a,
+  .panel-link {
+    color: #4c65bb;
+    font-weight: 600;
+  }
+
+  .home-sections {
+    display: grid;
+    gap: 1.2rem;
+  }
+
+  .home-panel {
+    padding: 1.35rem;
+  }
+
+  .home-panel-about {
+    display: block;
+  }
+
+  .home-panel h2 {
+    margin: 0;
+    font-size: 1.55rem;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+  }
+
+  .home-panel-about p {
+    margin: 0.65rem 0 0.85rem;
+    color: #67627d;
+  }
+
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: end;
+    margin-bottom: 1rem;
   }
 
   .feed-list {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    margin-bottom: 1.5rem;
   }
 
-  .view-all {
-    color: #0066cc;
-    text-decoration: none;
-    font-weight: 500;
-  }
-
-  .view-all:hover {
-    text-decoration: underline;
-  }
-
-  .categories {
-    padding: 3rem 2rem;
-    background: #f9f9f9;
-  }
-
-  .categories h2 {
-    text-align: center;
-    font-size: 1.5rem;
-    margin-bottom: 2rem;
-  }
-
-  .category-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 2rem;
-    max-width: 1000px;
-    margin: 0 auto;
-  }
-
-  .category-card {
-    padding: 2rem;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    text-decoration: none;
-    background: white;
-    transition: all 0.2s;
-  }
-
-  .category-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
-  .category-card h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1.3rem;
-  }
-
-  .category-card p {
-    margin: 0;
-    color: #666;
-    font-size: 0.9rem;
+  .empty-state {
+    color: #7c7792;
+    padding: 0.3rem 0;
   }
 
   @media (max-width: 768px) {
-    .home-feed {
+    .home-hero {
       grid-template-columns: 1fr;
-      padding: 2rem 1rem;
     }
 
-    .hero h1 {
-      font-size: 2rem;
+    .home-hero-copy,
+    .home-summary-card,
+    .home-panel {
+      border-radius: 20px;
+    }
+
+    .home-hero-copy {
+      padding: 1.4rem 1.2rem;
+    }
+
+    .home-summary-card,
+    .home-panel {
+      padding: 1.1rem;
     }
 
     .cta-group {
       flex-direction: column;
     }
 
-    .category-grid {
-      grid-template-columns: 1fr 1fr;
+    .panel-head {
+      flex-direction: column;
+      align-items: start;
     }
   }
 </style>

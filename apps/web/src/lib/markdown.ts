@@ -37,6 +37,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeStringify from 'rehype-stringify';
+import type { Root, Element, Text, Parent, RootContent, ElementContent } from 'hast';
 
 // Configure the unified processor
 const processor = unified()
@@ -124,19 +125,11 @@ function promoteStandaloneMath(markdown: string): string {
     .join('\n');
 }
 
-type HastNode = {
-  type?: string;
-  tagName?: string;
-  value?: string;
-  properties?: Record<string, unknown>;
-  children?: HastNode[];
-};
-
 function rehypeHeadingAnchors() {
-  return (tree: HastNode) => {
+  return (tree: Root) => {
     const usedIds = new Set<string>();
 
-    visit(tree as any, 'element', (node: HastNode) => {
+    visit(tree, 'element', (node: Element) => {
       if (!node.tagName || !/^h[1-6]$/.test(node.tagName)) return;
       if (!node.children?.length) return;
 
@@ -160,15 +153,21 @@ function rehypeHeadingAnchors() {
   };
 }
 
+function isElement(node: ElementContent | RootContent | undefined): node is Element {
+  return Boolean(node && node.type === 'element');
+}
+
 function rehypeCallouts() {
-  return (tree: HastNode) => {
-    visit(tree as any, 'element', (node: HastNode) => {
+  return (tree: Root) => {
+    visit(tree, 'element', (node: Element) => {
       if (node.tagName !== 'blockquote' || !node.children?.length) return;
 
       const firstChild = node.children[0];
-      if (firstChild?.tagName !== 'p' || !firstChild.children?.length) return;
+      if (!isElement(firstChild) || firstChild.tagName !== 'p' || !firstChild.children?.length) return;
 
-      const firstTextNode = firstChild.children.find((child) => child.type === 'text' && typeof child.value === 'string');
+      const firstTextNode = firstChild.children.find(
+        (child): child is Text => child.type === 'text' && typeof child.value === 'string'
+      );
       const rawText = firstTextNode?.value ?? '';
       const match = rawText.match(/^\[!(NOTE|TIP|INFO|WARN|WARNING|CAUTION)\]\s*/i);
       if (!match) return;
@@ -178,7 +177,9 @@ function rehypeCallouts() {
 
       firstTextNode!.value = rawText.replace(match[0], '');
       if (!firstTextNode!.value?.trim()) {
-        firstChild.children = firstChild.children.filter((child) => child !== firstTextNode);
+        firstChild.children = firstChild.children.filter(
+          (child: ElementContent) => child !== firstTextNode
+        );
       }
 
       node.properties = {
@@ -191,26 +192,27 @@ function rehypeCallouts() {
         tagName: 'div',
         properties: { className: ['callout-title'] },
         children: [{ type: 'text', value: label }],
-      });
+      } as Element);
     });
   };
 }
 
 function rehypeFigureImages() {
-  return (tree: HastNode) => {
-    visit(tree as any, 'element', (node: HastNode, index: number | undefined, parent: HastNode | undefined) => {
+  return (tree: Root) => {
+    visit(tree, 'element', (node: Element, index: number | undefined, parent: Parent | undefined) => {
       if (!parent || node.tagName !== 'p' || !node.children?.length || typeof index !== 'number') return;
       if (node.children.length !== 1) return;
-      if (!parent.children) return;
+      const parentChildren = parent.children as RootContent[] | undefined;
+      if (!parentChildren) return;
 
       const image = node.children[0];
-      if (image?.tagName !== 'img') return;
+      if (!isElement(image) || image.tagName !== 'img') return;
 
       const alt = typeof image.properties?.alt === 'string' ? image.properties.alt.trim() : '';
       if (!alt) return;
 
       parent.children = [
-        ...parent.children.slice(0, index),
+        ...parentChildren.slice(0, index),
         {
           type: 'element',
           tagName: 'figure',
@@ -225,15 +227,15 @@ function rehypeFigureImages() {
             },
           ],
         },
-        ...parent.children.slice(index + 1),
-      ];
+        ...parentChildren.slice(index + 1),
+      ] as RootContent[];
     });
   };
 }
 
-function extractNodeText(node: HastNode): string {
+function extractNodeText(node: RootContent | Root): string {
   if (node.type === 'text') return node.value ?? '';
-  if (!node.children?.length) return '';
+  if (!('children' in node) || !node.children?.length) return '';
   return node.children.map((child) => extractNodeText(child)).join(' ');
 }
 

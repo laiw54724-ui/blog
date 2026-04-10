@@ -1,4 +1,9 @@
-import { formatDate } from '@personal-blog/shared';
+import {
+  formatDate,
+  normalizeTagInput,
+  STRUCTURED_TAG_GROUP_ORDER,
+  type TagSummary,
+} from '@personal-blog/shared';
 import type { Entry, EntryMetrics, ResolvedCoverAsset } from '@personal-blog/shared';
 import { getResolvedCoverAssetsMap, getEntryMetricsMap } from './data';
 import {
@@ -24,8 +29,33 @@ export const CATEGORY_DESCRIPTIONS: Record<string, string> = {
 
 export const ENTRY_TYPE_LABELS: Record<string, string> = {
   article: '文章',
-  post: '動態',
+  post: '貼文',
 };
+
+export const TAG_GROUP_LABELS: Record<string, string> = {
+  genre: 'Genre',
+  tone: 'Tone',
+  setting: 'Setting',
+  relationship: 'Relationship',
+  topic: 'Topic',
+  general: '自由標籤',
+};
+
+export interface GroupedTagSummary {
+  key: string;
+  label: string;
+  isStructured: boolean;
+  tags: Array<
+    TagSummary & {
+      normalizedLabel: string;
+    }
+  >;
+}
+
+export interface SplitGroupedTagSummary {
+  structured: GroupedTagSummary[];
+  free: GroupedTagSummary[];
+}
 
 export interface EntryCardViewModel {
   id: string;
@@ -145,4 +175,65 @@ export async function buildEntryCardModels(
       metrics: metricsMap[entry.id] || fallbackMetrics(entry.id),
     };
   });
+}
+
+export function groupTagSummaries(
+  tags: TagSummary[],
+  preferredOrder: string[] = STRUCTURED_TAG_GROUP_ORDER
+): GroupedTagSummary[] {
+  const buckets = new Map<string, GroupedTagSummary>();
+
+  for (const tag of tags) {
+    const normalized = normalizeTagInput(tag.slug || tag.name);
+    const key = normalized.group || 'general';
+    const existing = buckets.get(key);
+    const enrichedTag = {
+      ...tag,
+      normalizedLabel: normalized.label,
+    };
+
+    if (existing) {
+      existing.tags.push(enrichedTag);
+      continue;
+    }
+
+    buckets.set(key, {
+      key,
+      label: TAG_GROUP_LABELS[key] || key,
+      isStructured: Boolean(normalized.isStructured && normalized.group),
+      tags: [enrichedTag],
+    });
+  }
+
+  const orderedGroups = Array.from(buckets.values())
+    .map((group) => ({
+      ...group,
+      tags: group.tags.sort((a, b) => {
+        if (b.entry_count !== a.entry_count) return b.entry_count - a.entry_count;
+        return a.normalizedLabel.localeCompare(b.normalizedLabel, 'zh-TW');
+      }),
+    }))
+    .sort((a, b) => {
+      const aIndex = preferredOrder.indexOf(a.key);
+      const bIndex = preferredOrder.indexOf(b.key);
+      if (aIndex !== -1 || bIndex !== -1) {
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      }
+      return a.label.localeCompare(b.label, 'en');
+    });
+
+  return orderedGroups;
+}
+
+export function splitTagSummaryGroups(
+  tags: TagSummary[],
+  preferredOrder: string[] = STRUCTURED_TAG_GROUP_ORDER
+): SplitGroupedTagSummary {
+  const grouped = groupTagSummaries(tags, preferredOrder);
+  return {
+    structured: grouped.filter((group) => group.isStructured),
+    free: grouped.filter((group) => !group.isStructured),
+  };
 }

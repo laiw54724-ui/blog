@@ -26,32 +26,44 @@ if (!CLIENT_ID) {
 }
 
 /**
- * Commands — all use modals so they have no options.
- * Edit / delete are now done via the /我的文章 button UI.
+ * Commands — five top-level entry points.
+ * Create flows use modals; manage flow uses deferred follow-up UI.
  */
 const commands = [
   {
-    name: '貼文',
-    description: '新增一則動態（開啟輸入視窗）',
+    name: '動態',
+    description: '貼文入口：快速記錄日常、近況與旅行片段',
+    options: [
+      {
+        type: 1,
+        name: '一般',
+        description: '新增一般貼文',
+      },
+      {
+        type: 1,
+        name: '旅記',
+        description: '新增旅行貼文，預設帶 travel setting',
+      },
+    ],
   },
   {
     name: '文章',
-    description: '新增一篇長文章（開啟輸入視窗）',
+    description: '文章入口：整理長文、書摘與深度內容',
+    options: [
+      {
+        type: 1,
+        name: '一般',
+        description: '新增一般文章草稿',
+      },
+      {
+        type: 1,
+        name: '書摘',
+        description: '新增書摘或閱讀心得',
+      },
+    ],
   },
   {
-    name: '旅記',
-    description: '新增旅遊記錄（開啟輸入視窗）',
-  },
-  {
-    name: '書摘',
-    description: '新增讀書心得（開啟輸入視窗）',
-  },
-  {
-    name: '我的文章',
-    description: '查看最近的文章，並可編輯、典藏或刪除',
-  },
-  {
-    name: '附圖',
+    name: '補圖',
     description: '為已存在的文章附加圖片',
     options: [
       {
@@ -76,31 +88,48 @@ const commands = [
   },
   {
     name: '個人資料',
-    description: '編輯個人名稱、簡介和連結',
-  },
-  {
-    name: '設定頭貼',
-    description: '上傳個人頭貼圖片',
+    description: '管理個人名稱、簡介、頭貼和橫條',
     options: [
       {
-        name: 'image',
-        description: '頭貼圖片',
-        type: 11, // ATTACHMENT
-        required: true,
+        type: 1,
+        name: '編輯',
+        description: '編輯名稱、簡介與連結',
+      },
+      {
+        type: 1,
+        name: '頭貼',
+        description: '上傳個人頭貼圖片',
+        options: [
+          {
+            name: 'image',
+            description: '頭貼圖片',
+            type: 11,
+            required: true,
+          },
+        ],
+      },
+      {
+        type: 1,
+        name: '橫條',
+        description: '上傳個人主頁橫條圖片',
+        options: [
+          {
+            name: 'image',
+            description: '橫條圖片（建議寬：長 = 3:1）',
+            type: 11,
+            required: true,
+          },
+        ],
       },
     ],
   },
   {
-    name: '設定橫條',
-    description: '上傳個人主頁橫條圖片',
-    options: [
-      {
-        name: 'image',
-        description: '橫條圖片（建議寬：長 = 3:1）',
-        type: 11, // ATTACHMENT
-        required: true,
-      },
-    ],
+    name: '管理',
+    description: '查看最近內容，並可編輯、典藏或刪除',
+  },
+  {
+    name: 'help',
+    description: '查看所有指令與使用方式',
   },
 ];
 

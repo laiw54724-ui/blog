@@ -1,0 +1,242 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import EntryCard from '../../components/EntryCard.astro'
+import { getEntriesByTagSlug, getPopularTags } from '../../lib/data'
+import { buildEntryCardModels, splitTagSummaryGroups } from '../../lib/presenters'
+import { applyPageCacheHeaders } from '../../lib/response'
+import { normalizeTagInput } from '@personal-blog/shared'
+
+const slug = Astro.params.slug || ''
+const entries = await getEntriesByTagSlug(slug, { limit: 60 })
+const cardModels = await buildEntryCardModels(entries, { excerptLength: 140 })
+const relatedTags = await getPopularTags({ limit: 14 })
+const groupedRelatedTags = splitTagSummaryGroups(relatedTags.filter((tag) => tag.slug !== slug))
+const normalizedCurrentTag = normalizeTagInput(slug)
+const currentTagKind = normalizedCurrentTag.isStructured ? '結構標籤' : '自由標籤'
+const currentTagDesc = normalizedCurrentTag.isStructured
+  ? `這是 ${currentTagKind}，屬於 ${normalizedCurrentTag.group} 群組。`
+  : '這是作者自由補充的標籤，用來保留比較細碎或臨時的語意。'
+
+applyPageCacheHeaders(Astro.response, 'articles')
+---
+
+<BaseLayout title={`#${normalizedCurrentTag.label} | Double River`} description={`標籤 #${normalizedCurrentTag.label} 的文章整理。`}>
+  <div class="tag-shell">
+    <header class="tag-header">
+      <p class="tag-kicker">tag archive</p>
+      <h1>#{normalizedCurrentTag.label}</h1>
+      <p class="tag-desc">依照這個標籤聚合的文章，目前 {cardModels.length} 篇。{currentTagDesc}</p>
+    </header>
+
+    <div class="tag-layout">
+      <section class="tag-main">
+        {cardModels.length > 0 ? (
+          <div class="tag-list">
+            {cardModels.map((vm) => (
+              <EntryCard
+                href={vm.href}
+                title={vm.displayTitle}
+                excerpt={vm.displayExcerpt}
+                date={vm.displayDate}
+                categoryLabel={vm.categoryLabel}
+                typeLabel={vm.typeLabel}
+                coverUrl={vm.coverUrl}
+                coverAlt={vm.coverAlt}
+                stats={vm.metrics}
+                variant="list"
+                showTypeBadge={true}
+              />
+            ))}
+          </div>
+        ) : (
+          <p class="tag-empty">這個標籤目前還沒有公開內容。</p>
+        )}
+      </section>
+
+      <aside class="tag-sidebar">
+        <section class="tag-card">
+          <div class="tag-card-head">
+            <h2>繼續探索</h2>
+            <a href="/tags">全部標籤</a>
+          </div>
+          <p class="tag-card-note">{currentTagKind}</p>
+          <div class="tag-groups">
+            {groupedRelatedTags.structured.map((group) => (
+              <section class="tag-group">
+                <h3>{group.label}</h3>
+                <div class="tag-cloud">
+                  {group.tags.map((tag) => (
+                    <a href={`/tags/${tag.slug}`} class="tag-chip">
+                      <span>#{tag.normalizedLabel}</span>
+                      <small>{tag.entry_count}</small>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            ))}
+            {groupedRelatedTags.free.length > 0 && (
+              <section class="tag-group">
+                <h3>自由標籤</h3>
+                <div class="tag-cloud">
+                  {groupedRelatedTags.free[0].tags.map((tag) => (
+                    <a href={`/tags/${tag.slug}`} class="tag-chip tag-chip-free">
+                      <span>#{tag.normalizedLabel}</span>
+                      <small>{tag.entry_count}</small>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .tag-shell {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+  }
+
+  .tag-header {
+    margin-bottom: 1.6rem;
+  }
+
+  .tag-kicker {
+    margin: 0 0 0.45rem;
+    color: #8f89b2;
+    font-size: 0.76rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .tag-header h1 {
+    margin: 0 0 0.45rem;
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1;
+    letter-spacing: -0.05em;
+  }
+
+  .tag-desc {
+    color: #726d89;
+  }
+
+  .tag-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .tag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .tag-card {
+    position: sticky;
+    top: 6rem;
+    padding: 1rem 1.05rem;
+    border: 1px solid #dddaf0;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .tag-card h2 {
+    margin: 0 0 0.9rem;
+    font-size: 1rem;
+  }
+
+  .tag-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: baseline;
+    margin-bottom: 0.9rem;
+  }
+
+  .tag-card-head h2 {
+    margin-bottom: 0;
+  }
+
+  .tag-card-head a {
+    color: #5164b6;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .tag-card-note {
+    margin: 0 0 0.85rem;
+    color: #8f89b2;
+    font-size: 0.8rem;
+  }
+
+  .tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .tag-groups {
+    display: grid;
+    gap: 0.95rem;
+  }
+
+  .tag-group h3 {
+    margin: 0 0 0.55rem;
+    font-size: 0.76rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #8f89b2;
+  }
+
+  .tag-chip {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    border: 1px solid #ddd8ef;
+    border-radius: 999px;
+    padding: 0.42rem 0.72rem;
+    background: #fff;
+    color: #4f4a68;
+    font-size: 0.85rem;
+  }
+
+  .tag-chip:hover {
+    border-color: #ccd5f4;
+    background: #f7f9ff;
+    color: #4966c7;
+  }
+
+  .tag-chip-free {
+    background: #fffdf9;
+  }
+
+  .tag-chip-free:hover {
+    border-color: #e4d6bf;
+    background: #fff8ec;
+    color: #9a5a1c;
+  }
+
+  .tag-empty {
+    padding: 1.1rem;
+    border-radius: 16px;
+    border: 1px dashed #d9d3ec;
+    color: #7f7896;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  @media (max-width: 860px) {
+    .tag-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .tag-card {
+      position: static;
+    }
+  }
+</style>

@@ -1,144 +1,194 @@
 ---
-// ReaderControls.astro - 閱讀器模式控制元件（Island）
+// ReaderControls.astro - 閱讀字級控制元件（Island）
 ---
 
-<div class="reader-controls">
-  <button class="font-btn" data-action="decrease" title="縮小字體">
-    A<sub>−</sub>
-  </button>
-  <button class="font-btn" data-action="reset" title="重置字體">A</button>
-  <button class="font-btn" data-action="increase" title="放大字體">
-    A<sup>+</sup>
-  </button>
+<div class="reader-controls" data-reader-controls>
+  <span class="reader-controls-label">字級</span>
+  <div class="reader-size-group" role="group" aria-label="文字大小">
+    <button class="reader-size-btn" data-size="small" type="button">小</button>
+    <button class="reader-size-btn is-active" data-size="medium" type="button">中</button>
+    <button class="reader-size-btn" data-size="large" type="button">大</button>
+  </div>
 </div>
 
 <style>
   .reader-controls {
     position: fixed;
-    top: 20px;
-    right: 20px;
-    display: flex;
-    gap: 8px;
-    z-index: 98;
-    background: white;
-    padding: 8px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-
-  .font-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    background: white;
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #666;
-    transition: all 0.2s;
-    display: flex;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 95;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
+    gap: 0.8rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dddaf0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 8px 20px rgba(91, 116, 200, 0.08);
+    backdrop-filter: blur(8px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
   }
 
-  .font-btn:hover {
-    border-color: #0066cc;
-    color: #0066cc;
-    background: #f0f7ff;
+  .reader-controls.is-hidden {
+    opacity: 0;
+    transform: translateY(12px);
+    pointer-events: none;
   }
 
-  .font-btn:active {
-    background: #e0ebf7;
+  .reader-controls-label {
+    color: #8a86a6;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
   }
 
-  .font-btn sub,
-  .font-btn sup {
-    font-size: 0.65rem;
+  .reader-size-group {
+    display: inline-flex;
+    gap: 0.35rem;
+  }
+
+  .reader-size-btn {
+    min-width: 2.2rem;
+    height: 2.1rem;
+    padding: 0 0.65rem;
+    border-radius: 999px;
+    border: 1px solid #ddd8ef;
+    background: #fff;
+    color: #6e6a86;
+    cursor: pointer;
+    font-size: 0.86rem;
+    font-weight: 700;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  }
+
+  .reader-size-btn:hover {
+    border-color: #ccd6f4;
+    color: #5670c8;
+    background: #f7f9ff;
+  }
+
+  .reader-size-btn.is-active {
+    border-color: #c8d1f3;
+    background: #eef2ff;
+    color: #4d65bc;
   }
 
   @media (max-width: 768px) {
     .reader-controls {
-      top: auto;
-      bottom: 1.25rem;
-      right: 1rem;
-      gap: 6px;
-      padding: 6px;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+      left: 1rem;
+      right: auto;
+      bottom: 1rem;
+      padding: 0.4rem 0.55rem;
+      gap: 0.6rem;
     }
 
-    .font-btn {
-      width: 32px;
-      height: 32px;
+    .reader-controls-label {
+      font-size: 0.74rem;
+    }
+
+    .reader-size-btn {
+      min-width: 2rem;
+      height: 1.95rem;
       font-size: 0.8rem;
+      padding: 0 0.55rem;
     }
   }
 </style>
 
 <script>
-  class ReaderControls {
-    baseSize = 1.0; // rem
-    currentSize = 1.0;
-    storageKey = 'blog-font-size';
-    minSize = 0.85;
-    maxSize = 1.5;
+  // @ts-nocheck
+  /**
+   * @typedef {'small' | 'medium' | 'large'} ReaderSize
+   */
 
-    constructor() {
-      this.loadSavedSize();
-      this.init();
-    }
+  const STORAGE_KEY = 'blog-reader-size';
+  const VISIBILITY_BOUND_KEY = 'readerControlsScrollBound';
 
-    init() {
-      const buttons = document.querySelectorAll<HTMLButtonElement>('.font-btn');
-      buttons.forEach((btn) => {
-        btn.addEventListener('click', (e: Event) => this.handleFontChange(e));
+  /** @type {Record<ReaderSize, { fontSize: string; lineHeight: string }>} */
+  const READER_SIZES = {
+    small: { fontSize: '0.96rem', lineHeight: '1.78' },
+    medium: { fontSize: '1.08rem', lineHeight: '1.9' },
+    large: { fontSize: '1.22rem', lineHeight: '2.02' },
+  };
+
+  /**
+   * @param {string | null | undefined} value
+   * @returns {ReaderSize}
+   */
+  function parseSize(/** @type {string | null | undefined} */ value) {
+    return value === 'small' || value === 'medium' || value === 'large' ? value : 'medium';
+  }
+
+  /**
+   * @param {ReaderSize} size
+   * @param {HTMLElement} target
+   * @param {HTMLElement} root
+   */
+  function applySize(
+    /** @type {ReaderSize} */ size,
+    /** @type {HTMLElement} */ target,
+    /** @type {HTMLElement} */ root
+  ) {
+    const preset = READER_SIZES[/** @type {ReaderSize} */ (size)];
+    target.style.fontSize = preset.fontSize;
+    target.style.lineHeight = preset.lineHeight;
+
+    root.querySelectorAll('.reader-size-btn').forEach((/** @type {Element} */ button) => {
+      if (!(button instanceof HTMLButtonElement)) return;
+      button.classList.toggle('is-active', button.dataset.size === size);
+    });
+  }
+
+  /**
+   * @param {ReaderSize} size
+   */
+  function saveSize(/** @type {ReaderSize} */ size) {
+    localStorage.setItem(STORAGE_KEY, size);
+  }
+
+  /**
+   * @returns {ReaderSize}
+   */
+  function getSavedSize() {
+    return parseSize(localStorage.getItem(STORAGE_KEY));
+  }
+
+  function initReaderControls() {
+    const root = document.querySelector('[data-reader-controls]');
+    if (!(root instanceof HTMLElement)) return;
+
+    const target = document.querySelector('.post-text, .markdown-content');
+    if (!(target instanceof HTMLElement)) return;
+
+    const saved = getSavedSize();
+    applySize(saved, target, root);
+
+    root.querySelectorAll('.reader-size-btn').forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) return;
+      button.addEventListener('click', () => {
+        const size = parseSize(button.dataset.size);
+        applySize(size, target, root);
+        saveSize(size);
       });
+    });
 
-      this.applyFontSize();
-    }
-
-    handleFontChange(e: Event) {
-      const target = e.target as HTMLElement | null;
-      const action = target?.closest<HTMLElement>('[data-action]')?.dataset.action;
-
-      switch (action) {
-        case 'increase':
-          this.currentSize = Math.min(this.maxSize, this.currentSize + 0.1);
-          break;
-        case 'decrease':
-          this.currentSize = Math.max(this.minSize, this.currentSize - 0.1);
-          break;
-        case 'reset':
-          this.currentSize = this.baseSize;
-          break;
-      }
-
-      this.applyFontSize();
-      this.saveFontSize();
-    }
-
-    applyFontSize() {
-      const el = document.querySelector<HTMLElement>('.post-text');
-      if (!el) return;
-
-      el.style.fontSize = `${this.currentSize}rem`;
-      const lineHeight = 1.8 + (this.currentSize - 1.0) * 0.3;
-      el.style.lineHeight = `${lineHeight}`;
-    }
-
-    saveFontSize() {
-      localStorage.setItem(this.storageKey, this.currentSize.toFixed(2));
-    }
-
-    loadSavedSize() {
-      const saved = localStorage.getItem(this.storageKey);
-      if (saved) {
-        this.currentSize = parseFloat(saved);
-      }
+    if (root.dataset.scrollBound !== '1') {
+      let lastScrollY = window.scrollY;
+      window.addEventListener(
+        'scroll',
+        () => {
+          const currentScrollY = window.scrollY;
+          const shouldHide = currentScrollY > lastScrollY && currentScrollY > 120;
+          root.classList.toggle('is-hidden', shouldHide);
+          lastScrollY = currentScrollY;
+        },
+        { passive: true }
+      );
+      root.dataset.scrollBound = '1';
     }
   }
 
-  if (document.querySelector('.post-text')) {
-    new ReaderControls();
+  if (document.querySelector('.post-text, .markdown-content')) {
+    initReaderControls();
   }
 </script>

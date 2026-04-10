@@ -1,11 +1,12 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro'
+import ReadingProgress from '../../components/ReadingProgress.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
 import { formatDate } from '@personal-blog/shared'
 import 'katex/dist/katex.min.css'
 import type { Asset } from '@personal-blog/shared'
 import { renderMarkdownToHtml, stripFirstH1 } from '../../lib/markdown'
-import { getEntryBySlug, getAssetsByEntryId } from '../../lib/data'
+import { getEntryBySlug, getAssetsByEntryId, getArticles } from '../../lib/data'
 import { applyPageCacheHeaders } from '../../lib/response'
 
 
@@ -27,20 +28,27 @@ const assets = await getAssetsByEntryId(entry.id)
 const coverAsset = assets.find((asset) => asset.kind === 'cover')
 const imageAssets = assets.filter((asset) => asset.kind === 'image')
 const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
+const allArticles = await getArticles()
+const sortedArticles = [...allArticles].sort((a, b) =>
+  new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime()
+)
+const articleIndex = sortedArticles.findIndex((article) => article.id === entry.id)
+const newerArticle = articleIndex > 0 ? sortedArticles[articleIndex - 1] : null
+const olderArticle = articleIndex >= 0 && articleIndex < sortedArticles.length - 1
+  ? sortedArticles[articleIndex + 1]
+  : null
 
 // 應用快取策略：10分鐘 CDN 快取 + 1小時過期後仍可用
 applyPageCacheHeaders(Astro.response, 'detail')
 ---
 
 <BaseLayout title={`${displayTitle} | Double River`}>
+  <ReadingProgress />
   <ReaderControls client:load />
   <article class="article">
     <header class="article-header">
       <div class="article-meta">
         <time datetime={entry.created_at}>{formatDate(entry.created_at)}</time>
-        {entry.category && (
-          <span class="category">{entry.category}</span>
-        )}
       </div>
       <h1>{displayTitle}</h1>
       {coverAsset && (
@@ -72,13 +80,30 @@ applyPageCacheHeaders(Astro.response, 'detail')
     </div>
 
     <footer class="article-footer">
+      {(newerArticle || olderArticle) && (
+        <div class="article-pagination">
+          {newerArticle ? (
+            <a href={`/article/${encodeURIComponent(newerArticle.slug || '')}`} class="page-link page-link-prev">
+              <small>← 較新一篇</small>
+              <span>{newerArticle.title || formatDate(newerArticle.created_at)}</span>
+            </a>
+          ) : (
+            <div class="page-link page-link-placeholder" aria-hidden="true"></div>
+          )}
+
+          {olderArticle ? (
+            <a href={`/article/${encodeURIComponent(olderArticle.slug || '')}`} class="page-link page-link-next">
+              <small>較舊一篇 →</small>
+              <span>{olderArticle.title || formatDate(olderArticle.created_at)}</span>
+            </a>
+          ) : (
+            <div class="page-link page-link-placeholder" aria-hidden="true"></div>
+          )}
+        </div>
+      )}
+
       <nav class="article-nav">
         <a href="/articles" class="btn-back">← 返回文章</a>
-        {entry.category && (
-          <a href={`/c/${entry.category}`} class="btn-category">
-            查看此分類
-          </a>
-        )}
       </nav>
     </footer>
   </article>
@@ -144,11 +169,6 @@ applyPageCacheHeaders(Astro.response, 'detail')
     text-transform: lowercase;
   }
 
-  .category {
-    color: #4b6fc8;
-    font-weight: 600;
-  }
-
   .article-header h1 {
     font-size: clamp(1.4rem, 3vw, 2rem);
     line-height: 1.25;
@@ -189,12 +209,14 @@ applyPageCacheHeaders(Astro.response, 'detail')
     line-height: 1.9;
     color: #333;
     margin: 1.6rem 0;
+    font-family: var(--serif);
   }
 
   .markdown-content {
     font-size: 1.08rem;
     line-height: 1.9;
     color: #2d2d38;
+    font-family: var(--serif);
   }
 
   .markdown-content > * + * {
@@ -573,6 +595,52 @@ applyPageCacheHeaders(Astro.response, 'detail')
     border-top: 1px solid #e8e2d9;
   }
 
+  .article-pagination {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .page-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-height: 96px;
+    padding: 0.95rem 1rem;
+    border: 1px solid #ddd8ef;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.82);
+    color: #302f45;
+  }
+
+  .page-link small {
+    color: #8c87a8;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+  }
+
+  .page-link span {
+    font-size: 0.96rem;
+    line-height: 1.55;
+    font-weight: 600;
+  }
+
+  .page-link:hover {
+    border-color: #ccd6f4;
+    background: #f7f9ff;
+    color: #4b6fc8;
+  }
+
+  .page-link-next {
+    text-align: right;
+    align-items: flex-end;
+  }
+
+  .page-link-placeholder {
+    visibility: hidden;
+  }
+
   .article-nav {
     display: flex;
     gap: 1rem;
@@ -610,6 +678,10 @@ applyPageCacheHeaders(Astro.response, 'detail')
   @media (max-width: 640px) {
     .article-header h1 {
       font-size: 1.5rem;
+    }
+
+    .article-pagination {
+      grid-template-columns: 1fr;
     }
 
     .article-nav {

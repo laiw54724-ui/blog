@@ -1,0 +1,239 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { getPopularTags } from '../lib/data'
+import { splitTagSummaryGroups } from '../lib/presenters'
+import { applyPageCacheHeaders } from '../lib/response'
+
+const popularTags = await getPopularTags({ type: 'article', limit: 80 })
+const groupedTags = splitTagSummaryGroups(popularTags)
+
+applyPageCacheHeaders(Astro.response, 'articles')
+---
+
+<BaseLayout title="標籤探索 | Double River" description="先看官方結構 tag，再延伸到自由標籤。">
+  <div class="tags-shell">
+    <header class="tags-header">
+      <p class="tags-kicker">tag explorer</p>
+      <h1>標籤探索</h1>
+      <p class="tags-desc">先看官方結構 tag，再往下延伸到自由標籤，會比一團 tag cloud 好逛得多。</p>
+    </header>
+
+    {groupedTags.structured.length > 0 && (
+      <section class="tag-section">
+        <div class="tag-section-head">
+          <div>
+            <p class="tag-section-kicker">structured tags</p>
+            <h2>官方結構標籤</h2>
+          </div>
+          <p>用來導覽主題、情緒、場景與關係。</p>
+        </div>
+        <div class="tag-groups">
+          {groupedTags.structured.map((group) => (
+            <section class="tag-group-card">
+              <div class="tag-group-head">
+                <h3>{group.label}</h3>
+                <span>{group.tags.length} tags</span>
+              </div>
+              <div class="tag-chip-cloud">
+                {group.tags.map((tag) => (
+                  <a href={`/tags/${tag.slug}`} class="tag-chip">
+                    <span>#{tag.normalizedLabel}</span>
+                    <small>{tag.entry_count}</small>
+                  </a>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {groupedTags.free.length > 0 && (
+      <section class="tag-section">
+        <div class="tag-section-head">
+          <div>
+            <p class="tag-section-kicker">free tags</p>
+            <h2>自由標籤</h2>
+          </div>
+          <p>作者自行補充的關鍵字，保留彈性，不硬塞進官方群組。</p>
+        </div>
+        <div class="tag-groups">
+          {groupedTags.free.map((group) => (
+            <section class="tag-group-card tag-group-card-free">
+              <div class="tag-group-head">
+                <h3>{group.label}</h3>
+                <span>{group.tags.length} tags</span>
+              </div>
+              <div class="tag-chip-cloud">
+                {group.tags.map((tag) => (
+                  <a href={`/tags/${tag.slug}`} class="tag-chip tag-chip-free">
+                    <span>#{tag.normalizedLabel}</span>
+                    <small>{tag.entry_count}</small>
+                  </a>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {groupedTags.structured.length === 0 && groupedTags.free.length === 0 && (
+      <p class="tags-empty">目前還沒有任何標籤，文章加上標籤後會在這裡出現。</p>
+    )}
+  </div>
+</BaseLayout>
+
+<style>
+  .tags-shell {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+  }
+
+  .tags-header {
+    margin-bottom: 1.6rem;
+  }
+
+  .tags-kicker {
+    margin: 0 0 0.45rem;
+    color: #8f89b2;
+    font-size: 0.76rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .tags-header h1 {
+    margin: 0 0 0.45rem;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    line-height: 1;
+    letter-spacing: -0.05em;
+  }
+
+  .tags-desc {
+    max-width: 46rem;
+    color: #726d89;
+  }
+
+  .tag-section + .tag-section {
+    margin-top: 1.6rem;
+  }
+
+  .tag-section-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: end;
+    margin-bottom: 0.95rem;
+  }
+
+  .tag-section-head h2 {
+    margin: 0.1rem 0 0;
+    font-size: 1.1rem;
+  }
+
+  .tag-section-head p:last-child {
+    max-width: 26rem;
+    margin: 0;
+    color: #7c7691;
+    font-size: 0.9rem;
+    text-align: right;
+  }
+
+  .tag-section-kicker {
+    margin: 0;
+    color: #8f89b2;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .tag-groups {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .tag-group-card {
+    padding: 1rem 1.05rem;
+    border: 1px solid #dddaf0;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .tag-group-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: baseline;
+    margin-bottom: 0.9rem;
+  }
+
+  .tag-group-head h2,
+  .tag-group-head h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .tag-group-head span {
+    color: #8f89b2;
+    font-size: 0.8rem;
+  }
+
+  .tag-chip-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid #ddd8ef;
+    border-radius: 999px;
+    padding: 0.45rem 0.75rem;
+    background: #fff;
+    color: #4f4a68;
+    font-size: 0.86rem;
+  }
+
+  .tag-chip:hover {
+    border-color: #ccd5f4;
+    background: #f7f9ff;
+    color: #4966c7;
+  }
+
+  .tag-group-card-free {
+    border-style: dashed;
+    background: rgba(255, 251, 245, 0.86);
+  }
+
+  .tag-chip-free {
+    background: #fffdf9;
+  }
+
+  .tag-chip-free:hover {
+    border-color: #e4d6bf;
+    background: #fff8ec;
+    color: #9a5a1c;
+  }
+
+  @media (max-width: 720px) {
+    .tag-section-head {
+      align-items: start;
+      flex-direction: column;
+    }
+
+    .tag-section-head p:last-child {
+      text-align: left;
+    }
+  }
+
+  .tags-empty {
+    padding: 1.5rem 1.25rem;
+    border: 1px dashed var(--border);
+    border-radius: 16px;
+    color: var(--text-muted);
+    background: var(--surface);
+  }
+</style>

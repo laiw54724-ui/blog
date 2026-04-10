@@ -204,6 +204,47 @@ describe('GET /api/entries/assets', () => {
   });
 });
 
+describe('GET /api/tags', () => {
+  it('returns public tags with entry counts', async () => {
+    const rows = [
+      { id: 'tag_1', name: 'BL', slug: 'bl', created_at: '2026-04-01', entry_count: 3 },
+      { id: 'tag_2', name: '校園', slug: 'campus', created_at: '2026-04-01', entry_count: 2 },
+    ];
+    const db = createMockDb({ allResults: rows });
+    const env = createMockEnv(db);
+    const res = await makeRequest('/api/tags?type=article&limit=10', env);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data).toEqual(rows);
+    expect(body.count).toBe(2);
+  });
+
+  it('passes filters to tag query', async () => {
+    const db = createMockDb({ allResults: [] });
+    const env = createMockEnv(db);
+    await makeRequest('/api/tags?type=article&category=reading&limit=12', env);
+
+    const sql = db._queries[0]?.sql || '';
+    expect(sql).toContain('entries.entry_type = ?');
+    expect(sql).toContain('entries.category = ?');
+    expect(sql).toContain('LIMIT ?');
+  });
+});
+
+describe('GET /api/tags/:slug/entries', () => {
+  it('returns public entries for a tag slug', async () => {
+    const db = createMockDb({ allResults: [sampleEntries[1]] });
+    const env = createMockEnv(db);
+    const res = await makeRequest('/api/tags/bl/entries?type=article', env);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data).toEqual([sampleEntries[1]]);
+    expect(body.count).toBe(1);
+  });
+});
+
 describe('GET /api/entries/:id', () => {
   it('returns entry by ID', async () => {
     const entry = sampleEntries[0];

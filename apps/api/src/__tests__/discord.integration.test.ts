@@ -88,19 +88,40 @@ describe('POST /api/discord/interactions', () => {
 
   // ── Slash commands → open Modal (type 9) ─────────────────────────────────
 
-  it.each([
-    ['post', '貼文'],
-    ['article', '文章'],
-    ['travel', '旅記'],
-    ['reading', '書摘'],
-  ])('%s command opens a modal', async (key) => {
+  it('new grouped commands resolve subcommands into create modals', async () => {
     const env = createMockEnv(createMockDb());
-    const res = await post(env, command(key));
+
+    const postRes = await post(env, command('動態', [{ type: 1, name: '一般' }]));
+    const postBody = (await postRes.json()) as any;
+    expect(postBody.type).toBe(9);
+    expect(postBody.data.custom_id).toBe('create:post');
+
+    const readingRes = await post(env, command('文章', [{ type: 1, name: '書摘' }]));
+    const readingBody = (await readingRes.json()) as any;
+    expect(readingBody.type).toBe(9);
+    expect(readingBody.data.custom_id).toBe('create:reading');
+  });
+
+  it('/help returns the current command guide', async () => {
+    const env = createMockEnv(createMockDb());
+    const res = await post(env, command('help'));
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
-    expect(body.type).toBe(9); // MODAL
-    expect(body.data.custom_id).toBe(`create:${key}`);
-    expect(body.data.components).toHaveLength(2); // title + content inputs
+    expect(body.type).toBe(4);
+    expect(body.data.content).toContain('Discord 指令大全');
+    expect(body.data.content).toContain('/動態');
+    expect(body.data.content).toContain('/管理');
+    expect(body.data.content).toContain('structured tags');
+    expect(body.data.content).toContain('topic:proof');
+  });
+
+  it('old Chinese command names are rejected', async () => {
+    const env = createMockEnv(createMockDb());
+    const res = await post(env, command('貼文'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.type).toBe(4);
+    expect(body.data.content).toContain('未知指令');
   });
 
   it('unknown command → ephemeral error (still 200)', async () => {
@@ -113,12 +134,12 @@ describe('POST /api/discord/interactions', () => {
     expect(body.data.flags).toBe(64); // ephemeral
   });
 
-  // ── /我的文章 ──────────────────────────────────────────────────────────
+  // ── /管理 ──────────────────────────────────────────────────────────────
 
-  it('/我的文章 responds immediately with deferred (type 5)', async () => {
+  it('/管理 responds immediately with deferred (type 5)', async () => {
     const db = createMockDb({ allResults: sampleEntries });
     const env = { ...createMockEnv(db), DISCORD_APPLICATION_ID: '123', executionCtx: { waitUntil: vi.fn() } };
-    const res = await post(env, { ...command('我的文章'), token: 'interaction_token' });
+    const res = await post(env, { ...command('管理'), token: 'interaction_token' });
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     // Deferred ephemeral response
@@ -133,7 +154,12 @@ describe('POST /api/discord/interactions', () => {
     const env = createMockEnv(db);
     const res = await post(
       env,
-      modalSubmit('create:post', { content: '今天天氣很好，出去走走了。' })
+      modalSubmit('create:post', {
+        excerpt: '今天散步備忘',
+        publish_mode: 'public',
+        tags: 'daily, mood:calm',
+        content: '今天天氣很好，出去走走了。',
+      })
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
@@ -150,11 +176,17 @@ describe('POST /api/discord/interactions', () => {
     const env = createMockEnv(db);
     const res = await post(
       env,
-      modalSubmit('create:article', { title: '我的旅遊心得', content: '這次去了東京…' })
+      modalSubmit('create:article', {
+        title: '我的旅遊心得',
+        publish_mode: 'draft',
+        tags: 'travel review',
+        content: '這次去了東京…',
+      })
     );
     const body = (await res.json()) as any;
     expect(body.type).toBe(4);
     expect(body.data.content).toContain('✅');
+    expect(body.data.content).toContain('draft');
   });
 
   it('create modal with empty content → error', async () => {
@@ -164,6 +196,21 @@ describe('POST /api/discord/interactions', () => {
     const body = (await res.json()) as any;
     expect(body.type).toBe(4);
     expect(body.data.content).toContain('❌');
+  });
+
+  it('create modal accepts unlisted publish mode', async () => {
+    const db = createMockDb({ firstResult: null });
+    const env = createMockEnv(db);
+    const res = await post(
+      env,
+      modalSubmit('create:post', {
+        publish_mode: 'unlisted',
+        content: '只給知道連結的人看',
+      })
+    );
+    const body = (await res.json()) as any;
+    expect(body.type).toBe(4);
+    expect(body.data.content).toContain('unlisted');
   });
 
   it('edit modal submit → updates entry', async () => {
@@ -327,7 +374,7 @@ describe('POST /api/discord/interactions', () => {
   it('bulk_select → shows action buttons with encoded IDs', async () => {
     const env = createMockEnv(createMockDb());
     const selectedIds = [sampleEntries[0].id, sampleEntries[2].id];
-    const res = await post(env, selectMenu('bulk_select', selectedIds));
+    const res = await post(env, selectMenu('bulk_select:all:all', selectedIds));
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.type).toBe(7); // UPDATE_MESSAGE
@@ -336,8 +383,31 @@ describe('POST /api/discord/interactions', () => {
     const buttons = body.data.components[0].components;
     const publishBtn = buttons.find((b: any) => b.custom_id?.startsWith('bulk_pub:'));
     expect(publishBtn).toBeDefined();
+    expect(publishBtn.custom_id).toContain('all:all');
     expect(publishBtn.custom_id).toContain(sampleEntries[0].id);
     expect(publishBtn.custom_id).toContain(sampleEntries[2].id);
+  });
+
+  it('manage_type select → refreshes list with article filter', async () => {
+    const db = createMockDb({ allResults: sampleEntries });
+    const env = createMockEnv(db);
+    const res = await post(env, selectMenu('manage_type:all:all', ['article']));
+    const body = (await res.json()) as any;
+    expect(body.type).toBe(7);
+    expect(body.data.embeds[0].title).toContain('文章');
+    const query = db._queries.at(-1);
+    expect(query?.params).toEqual(['article', 5]);
+  });
+
+  it('manage_status select → refreshes list with draft filter', async () => {
+    const db = createMockDb({ allResults: sampleEntries });
+    const env = createMockEnv(db);
+    const res = await post(env, selectMenu('manage_status:article:all', ['draft']));
+    const body = (await res.json()) as any;
+    expect(body.type).toBe(7);
+    expect(body.data.embeds[0].title).toContain('草稿');
+    const query = db._queries.at(-1);
+    expect(query?.params).toEqual(['article', 'draft', 5]);
   });
 
   it('bulk_select with no values → error', async () => {

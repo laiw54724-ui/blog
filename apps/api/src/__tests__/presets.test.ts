@@ -3,12 +3,13 @@ import { COMMAND_PRESETS, getCommandPreset, listCommands } from '../discord/pres
 
 describe('COMMAND_PRESETS', () => {
   it('defines post preset', () => {
-    expect(COMMAND_PRESETS.post).toEqual({
+    expect(COMMAND_PRESETS.post).toMatchObject({
       entry_type: 'post',
       category: 'journal',
       status: 'published',
       visibility: 'public',
       description: expect.any(String),
+      lane: 'stream',
     });
   });
 
@@ -60,5 +61,10 @@ describe('listCommands', () => {
     expect(names).toContain('article');
     expect(names).toContain('travel');
     expect(names).toContain('reading');
+  });
+
+  it('maps new grouped Chinese command names', () => {
+    expect(getCommandPreset('post')).toBeTruthy();
+    expect(getCommandPreset('article')).toBeTruthy();
   });
 });

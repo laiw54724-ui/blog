@@ -67,6 +67,10 @@ export interface Tag {
   created_at: string;
 }
 
+export interface TagSummary extends Tag {
+  entry_count: number;
+}
+
 export interface Asset {
   id: string;
   entry_id: string | null;

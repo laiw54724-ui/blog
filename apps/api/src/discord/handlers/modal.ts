@@ -12,6 +12,9 @@ interface ModalComponent {
   components?: Array<{ custom_id: string; value: string }>;
 }
 
+type EntryStatus = 'published' | 'draft' | 'private' | 'archived' | 'inbox';
+type EntryVisibility = 'private' | 'unlisted' | 'public';
+
 function extractModalValues(components: ModalComponent[]): Record<string, string> {
   const values: Record<string, string> = {};
   for (const row of components) {
@@ -20,6 +23,28 @@ function extractModalValues(components: ModalComponent[]): Record<string, string
     }
   }
   return values;
+}
+
+function resolvePublishMode(
+  rawValue: string | undefined,
+  fallbackStatus: EntryStatus,
+  fallbackVisibility: EntryVisibility
+): { status: EntryStatus; visibility: EntryVisibility } {
+  const value = rawValue?.trim().toLowerCase();
+  switch (value) {
+    case 'draft':
+      return { status: 'draft', visibility: 'private' };
+    case 'public':
+      return { status: 'published', visibility: 'public' };
+    case 'unlisted':
+      return { status: 'published', visibility: 'unlisted' };
+    case 'private':
+      return { status: 'private', visibility: 'private' };
+    case 'inbox':
+      return { status: 'inbox', visibility: 'private' };
+    default:
+      return { status: fallbackStatus, visibility: fallbackVisibility };
+  }
 }
 
 /** Handle modal submit for entry creation */
@@ -36,13 +61,24 @@ export async function handleCreateModal(
   const values = extractModalValues(components);
   const content = values['content']?.trim();
   const title = values['title']?.trim() || undefined;
+  const excerpt = values['excerpt']?.trim() || undefined;
+  const tags = values['tags']?.trim() || undefined;
 
   if (!content) {
     return { type: 4, data: { content: '❌ 內容不能為空', flags: 64 } };
   }
 
   try {
-    const result = await createEntryFromCommand(db, { preset, content, title });
+    const publishMode = resolvePublishMode(values['publish_mode'], preset.status, preset.visibility);
+    const result = await createEntryFromCommand(db, {
+      preset,
+      content,
+      title,
+      excerpt,
+      extraTags: tags,
+      status: publishMode.status,
+      visibility: publishMode.visibility,
+    });
     return {
       type: 4,
       data: {

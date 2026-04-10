@@ -15,6 +15,7 @@
  */
 
 import { getEntryById, archiveEntry, deleteEntry, updateEntry } from '@personal-blog/shared/db';
+import { buildListPayload, parseManageFilterPayload, type ManageFilters } from './list';
 
 /** Build the edit modal pre-filled with current content + status */
 function editModal(entryId: string, entry: any) {
@@ -131,13 +132,18 @@ function hardDeleteConfirmMessage(entryId: string, title: string) {
   };
 }
 
+function encodeManageFilters(filters: ManageFilters) {
+  return `${filters.entryType ?? 'all'}:${filters.status ?? 'all'}`;
+}
+
 /** After user selects entries from the multi-select, show action buttons with IDs encoded */
-function bulkActionButtons(selectedIds: string[]) {
+function bulkActionButtons(selectedIds: string[], filters: ManageFilters = {}) {
   const encoded = selectedIds.join('|');
+  const encodedFilters = encodeManageFilters(filters);
   return {
     type: 7, // UPDATE_MESSAGE
     data: {
-      content: `已選擇 **${selectedIds.length}** 篇文章，要執行什麼操作？`,
+      content: `已選擇 **${selectedIds.length}** 筆內容，要執行什麼操作？`,
       embeds: [],
       components: [
         {
@@ -147,19 +153,19 @@ function bulkActionButtons(selectedIds: string[]) {
               type: 2,
               style: 1, // PRIMARY
               label: '✅ 發佈所選',
-              custom_id: `bulk_pub:${encoded}`,
+              custom_id: `bulk_pub:${encodedFilters}:${encoded}`,
             },
             {
               type: 2,
               style: 3, // SUCCESS
               label: '🗃️ 典藏所選',
-              custom_id: `bulk_archive:${encoded}`,
+              custom_id: `bulk_archive:${encodedFilters}:${encoded}`,
             },
             {
               type: 2,
               style: 4, // DANGER
               label: '🗑️ 刪除所選',
-              custom_id: `bulk_del:${encoded}`,
+              custom_id: `bulk_del:${encodedFilters}:${encoded}`,
             },
             {
               type: 2,
@@ -183,13 +189,38 @@ export async function handleComponent(db: any, customId: string, values?: string
     };
   }
 
+  // Management filters — update the list in place
+  if (customId.startsWith('manage_type:') || customId.startsWith('manage_status:')) {
+    const colonIdx = customId.indexOf(':');
+    const action = customId.slice(0, colonIdx);
+    const currentFilters = parseManageFilterPayload(customId.slice(colonIdx + 1));
+    const selectedValue = values?.[0];
+
+    const nextFilters: ManageFilters =
+      action === 'manage_type'
+        ? {
+            entryType: selectedValue === 'all' ? undefined : (selectedValue as ManageFilters['entryType']),
+            status: currentFilters.status,
+          }
+        : {
+            entryType: currentFilters.entryType,
+            status: selectedValue === 'all' ? undefined : (selectedValue as ManageFilters['status']),
+          };
+
+    return {
+      type: 7,
+      data: await buildListPayload(db, nextFilters),
+    };
+  }
+
   // Bulk select menu — user picked entries from the multi-select
-  if (customId === 'bulk_select') {
+  if (customId === 'bulk_select' || customId.startsWith('bulk_select:')) {
     const selectedIds = (values || []).filter(Boolean);
     if (selectedIds.length === 0) {
-      return { type: 4, data: { content: '❌ 未選擇任何文章', flags: 64 } };
+      return { type: 4, data: { content: '❌ 未選擇任何內容', flags: 64 } };
     }
-    return bulkActionButtons(selectedIds);
+    const filters = customId === 'bulk_select' ? {} : parseManageFilterPayload(customId.slice('bulk_select:'.length));
+    return bulkActionButtons(selectedIds, filters);
   }
 
   const colonIdx = customId.indexOf(':');
@@ -198,7 +229,10 @@ export async function handleComponent(db: any, customId: string, values?: string
 
   // Bulk actions — IDs encoded in custom_id separated by '|'
   if (action === 'bulk_pub' || action === 'bulk_archive' || action === 'bulk_del') {
-    const ids = payload.split('|').filter(Boolean);
+    const payloadParts = payload.split(':');
+    const filters = payloadParts.length >= 3 ? parseManageFilterPayload(`${payloadParts[0]}:${payloadParts[1]}`) : {};
+    const idsRaw = payloadParts.length >= 3 ? payloadParts.slice(2).join(':') : payload;
+    const ids = idsRaw.split('|').filter(Boolean);
     if (ids.length === 0) {
       return { type: 4, data: { content: '❌ 無效的批次操作', flags: 64 } };
     }
@@ -208,7 +242,10 @@ export async function handleComponent(db: any, customId: string, values?: string
         await Promise.all(ids.map((id) => updateEntry(db, id, { status: 'published', visibility: 'public' })));
         return {
           type: 7,
-          data: { content: `✅ 已發佈 ${ids.length} 篇文章。`, embeds: [], components: [] },
+          data: {
+            ...(await buildListPayload(db, filters)),
+            content: `✅ 已發佈 ${ids.length} 筆內容，並設為公開。`,
+          },
         };
       }
 
@@ -216,7 +253,10 @@ export async function handleComponent(db: any, customId: string, values?: string
         await Promise.all(ids.map((id) => archiveEntry(db, id)));
         return {
           type: 7,
-          data: { content: `🗃️ 已典藏 ${ids.length} 篇文章。`, embeds: [], components: [] },
+          data: {
+            ...(await buildListPayload(db, filters)),
+            content: `🗃️ 已典藏 ${ids.length} 筆內容，並從公開列表移除。`,
+          },
         };
       }
 
@@ -224,7 +264,10 @@ export async function handleComponent(db: any, customId: string, values?: string
         await Promise.all(ids.map((id) => deleteEntry(db, id)));
         return {
           type: 7,
-          data: { content: `🗑️ 已永久刪除 ${ids.length} 篇文章。`, embeds: [], components: [] },
+          data: {
+            ...(await buildListPayload(db, filters)),
+            content: `🗑️ 已永久刪除 ${ids.length} 筆內容。`,
+          },
         };
       }
     } catch (error) {
