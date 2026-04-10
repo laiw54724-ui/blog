@@ -59,9 +59,9 @@ const hasCover = Boolean(coverUrl)
     </div>
   )}
 
-  <!-- Footer: stats + read more -->
-  <footer class="feed-footer">
-    {stats !== undefined ? (
+  <!-- Footer: stats only -->
+  {stats !== undefined && (
+    <footer class="feed-footer">
       <div class="feed-stats">
         <span class="fstat">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -76,9 +76,8 @@ const hasCover = Boolean(coverUrl)
           {stats.view_count}
         </span>
       </div>
-    ) : <span />}
-    <a href={href} class="feed-read-more">閱讀全文 →</a>
-  </footer>
+    </footer>
+  )}
 </article>
 
 
@@ -212,8 +211,7 @@ const hasCover = Boolean(coverUrl)
   .feed-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.55rem 1.1rem;
+    padding: 0.55rem 1.1rem 0.7rem;
     border-top: 1px solid var(--border, #dddaf0);
   }
 
@@ -234,18 +232,6 @@ const hasCover = Boolean(coverUrl)
     width: 13px;
     height: 13px;
     flex-shrink: 0;
-  }
-
-  .feed-read-more {
-    font-size: 0.82rem;
-    color: var(--accent, #5b74c8);
-    text-decoration: none;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .feed-read-more:hover {
-    text-decoration: underline;
   }
 
   @media (max-width: 640px) {
