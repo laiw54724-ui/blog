@@ -428,9 +428,9 @@ const jsonData = JSON.stringify(
 
   .reading-table-wrap {
     overflow-x: auto;
-    border: 1px solid #e8e4f4;
+    border: 1px solid var(--border);
     border-radius: 14px;
-    background: rgba(255,255,255,0.85);
+    background: transparent;
   }
 
   .reading-table {
@@ -440,8 +440,8 @@ const jsonData = JSON.stringify(
   }
 
   .reading-table thead {
-    background: #f5f3fb;
-    border-bottom: 1px solid #e8e4f4;
+    background: var(--accent-bg);
+    border-bottom: 1px solid var(--border);
   }
 
   .reading-table th {
@@ -451,26 +451,26 @@ const jsonData = JSON.stringify(
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #7a758c;
+    color: var(--text-muted);
     white-space: nowrap;
   }
 
   .reading-table td {
     padding: 0.68rem 0.9rem;
     vertical-align: middle;
-    border-bottom: 1px solid #f0edf9;
-    color: #2b2d43;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
   }
 
   .reading-table tbody tr:last-child td { border-bottom: none; }
-  .reading-table tbody tr:hover td { background: #faf9fe; }
+  .reading-table tbody tr:hover td { background: var(--accent-bg); }
 
   .col-title  { min-width: 130px; max-width: 210px; }
-  .col-author { min-width: 72px; color: #6e6a84; }
+  .col-author { min-width: 72px; color: var(--text-muted); }
   .col-genre, .col-medium, .col-status { white-space: nowrap; }
   .col-score  { white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .col-date   { white-space: nowrap; font-variant-numeric: tabular-nums; color: #9892ae; font-size: 0.83rem; }
-  .col-review { color: #5e5a72; font-size: 0.85rem; }
+  .col-date   { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 0.83rem; }
+  .col-review { color: var(--text-muted); font-size: 0.85rem; }
 
   .entry-title-link {
     color: #2b2d43;
@@ -478,7 +478,7 @@ const jsonData = JSON.stringify(
     text-decoration: none;
   }
   .entry-title-link:hover { color: var(--reading-accent, #a85f43); text-decoration: underline; }
-  .entry-title-text { font-weight: 600; color: #4a4860; }
+  .entry-title-text { font-weight: 600; color: var(--text); }
 
   .badge {
     display: inline-block;
@@ -507,26 +507,10 @@ const jsonData = JSON.stringify(
 
   .reading-empty {
     text-align: center;
-    color: #9892ae;
+    color: var(--text-muted);
     padding: 3rem;
     font-size: 0.95rem;
     line-height: 1.8;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .reading-header { border-color: #3a3650; }
-    .stat-item { background: #211f35; border-color: #3a3650; }
-    .stat-label { color: #7a7494; }
-    .toolbar-search input,
-    .toolbar-filters select { background: #1e1c30; border-color: #3a3650; color: #d0ceea; }
-    .reading-table-wrap { background: #1a1829; border-color: #2e2b48; }
-    .reading-table thead { background: #1e1c30; }
-    .reading-table th { color: #6a6480; }
-    .reading-table td { border-color: #252238; color: #d0ceea; }
-    .reading-table tbody tr:hover td { background: #1e1c30; }
-    .col-author { color: #8a8498; }
-    .entry-title-link { color: #d0ceea; }
-    .entry-title-text { color: #a8a4c4; }
   }
 
   @media (max-width: 720px) {
