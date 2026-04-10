@@ -9,6 +9,12 @@ import { sendListFollowup } from './handlers/list';
 import { handleComponent } from './handlers/component';
 import { getEntryBySlug, createAsset } from '@personal-blog/shared/db';
 import { processAttachments } from './attachments';
+import {
+  createReadingEntry,
+  findReadingEntriesByTitle,
+  listReadingEntries,
+  updateReadingEntry,
+} from '@personal-blog/shared/reading-db';
 
 interface DiscordEnv {
   DB?: D1Database;
@@ -107,11 +113,105 @@ function buildHelpMessage() {
     '5. `/管理`',
     '查看最近內容，並可編輯、典藏、刪除',
     '',
+    '6. `/讀了`',
+    '新增閱讀記錄：作品名、作者、分類、狀態',
+    '',
+    '7. `/補心得`',
+    '補短評、文案或詳細心得',
+    '',
+    '8. `/改狀態`',
+    '把閱讀改成讀完、追更中或棄文',
+    '',
+    '9. `/書單`',
+    '查看最近閱讀記錄，或用關鍵字搜尋',
+    '',
     'Tag 規則',
     'structured tags：genre / tone / setting / relationship / topic',
     'free tags：其他自由關鍵字',
     '例：proof -> topic:proof，travel -> setting:travel',
   ].join('\n');
+}
+
+function extractOptionValue(
+  options: DiscordAttachmentOption[],
+  name: string
+): string | undefined {
+  const option = options.find((item) => item.name === name);
+  if (typeof option?.value === 'string') return option.value;
+  if (typeof option?.value === 'number') return String(option.value);
+  return undefined;
+}
+
+function isReadingGenre(value: string): value is 'bl' | 'bg' | 'gl' | 'gen' {
+  return value === 'bl' || value === 'bg' || value === 'gl' || value === 'gen';
+}
+
+function isReadingMedium(
+  value: string
+): value is 'novel' | 'comic' | 'manhwa' | 'manga' | 'webtoon' | 'drama' {
+  return (
+    value === 'novel' ||
+    value === 'comic' ||
+    value === 'manhwa' ||
+    value === 'manga' ||
+    value === 'webtoon' ||
+    value === 'drama'
+  );
+}
+
+function isReadStatus(value: string): value is 'completed' | 'ongoing' | 'dropped' {
+  return value === 'completed' || value === 'ongoing' || value === 'dropped';
+}
+
+function parseReadingScore(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const score = Number(value);
+  if (!Number.isFinite(score) || score < 0 || score > 10) {
+    return Number.NaN;
+  }
+  return score;
+}
+
+function normalizeReadAt(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+}
+
+
+function readingReviewModal(title: string, slug: string) {
+  return {
+    type: 9,
+    data: {
+      custom_id: `reading_review_modal:${slug}`,
+      title: `補心得：${title.slice(0, 40)}`,
+      components: [
+        {
+          type: 1,
+          components: [{ type: 4, custom_id: 'short_review', label: '短評（選填）', style: 1, required: false, max_length: 280, placeholder: '一句話記下你的感受' }],
+        },
+        {
+          type: 1,
+          components: [{ type: 4, custom_id: 'blurb', label: '文案 / 簡介（選填）', style: 2, required: false, max_length: 4000, placeholder: '貼作品簡介或文案' }],
+        },
+        {
+          type: 1,
+          components: [{ type: 4, custom_id: 'detail_review', label: '詳細心得（選填）', style: 2, required: false, max_length: 4000, placeholder: '完整心得之後慢慢補也可以' }],
+        },
+      ],
+    },
+  };
+}
+
+function labelReadStatus(status: string) {
+  if (status === 'completed') return '讀完';
+  if (status === 'ongoing') return '追更中';
+  if (status === 'dropped') return '棄文';
+  return status;
+}
+
+function normalizeLookupKeyword(value: string) {
+  return value.trim().toLocaleLowerCase('zh-TW');
 }
 
 export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv }>) {
@@ -170,6 +270,158 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
         type: 4,
         data: {
           content: buildHelpMessage(),
+          flags: 64,
+        },
+      });
+    }
+
+    if (commandKey === 'reading_create') {
+      const title = extractOptionValue(options, 'title')?.trim();
+      const author = extractOptionValue(options, 'author')?.trim();
+      const genreRaw = extractOptionValue(options, 'genre')?.trim().toLowerCase();
+      const mediumRaw = extractOptionValue(options, 'medium')?.trim().toLowerCase();
+      const statusRaw = extractOptionValue(options, 'status')?.trim().toLowerCase();
+      const scoreRaw = extractOptionValue(options, 'score')?.trim();
+      const readAtRaw = extractOptionValue(options, 'read_at');
+
+      if (!title) {
+        return c.json({ type: 4, data: { content: '❌ 作品名不能為空', flags: 64 } });
+      }
+      if (!genreRaw || !isReadingGenre(genreRaw)) {
+        return c.json({ type: 4, data: { content: '❌ 分類格式不正確', flags: 64 } });
+      }
+      if (!statusRaw || !isReadStatus(statusRaw)) {
+        return c.json({ type: 4, data: { content: '❌ 閱讀狀態格式不正確', flags: 64 } });
+      }
+
+      const medium = mediumRaw && isReadingMedium(mediumRaw) ? mediumRaw : 'novel';
+      const score = parseReadingScore(scoreRaw);
+      if (Number.isNaN(score)) {
+        return c.json({ type: 4, data: { content: '❌ 評分請填 0 到 10 之間的數字', flags: 64 } });
+      }
+
+      const readAt = normalizeReadAt(readAtRaw);
+      if (readAt === '') {
+        return c.json({
+          type: 4,
+          data: { content: '❌ 閱讀日期請用 YYYY-MM-DD，例如 2026-04-10', flags: 64 },
+        });
+      }
+
+      const result = await createReadingEntry(db, {
+        title,
+        author: author || undefined,
+        genre: genreRaw,
+        medium,
+        read_status: statusRaw,
+        score,
+        read_at: readAt,
+        source: 'discord',
+      });
+
+      const detailParts = [
+        author ? `作者：${author}` : '',
+        score !== undefined ? `評分：${score.toFixed(1)}` : '',
+        readAt ? `閱讀日期：${readAt}` : '',
+      ].filter(Boolean);
+
+      return c.json({
+        type: 4,
+        data: {
+          content: [
+            `✅ 已新增閱讀記錄：${title}`,
+            detailParts.length > 0 ? detailParts.join('｜') : '',
+            `/reading/${result.slug}`,
+          ]
+            .filter(Boolean)
+            .join('\n'),
+          flags: 64,
+        },
+      });
+    }
+
+    if (commandKey === 'reading_review') {
+      const keyword = extractOptionValue(options, 'title')?.trim();
+      if (!keyword) {
+        return c.json({ type: 4, data: { content: '❌ 請提供作品名', flags: 64 } });
+      }
+      const matches = await findReadingEntriesByTitle(db, keyword, 5);
+      if (matches.length === 0) {
+        return c.json({ type: 4, data: { content: `❌ 找不到「${keyword}」`, flags: 64 } });
+      }
+
+      const exactMatches = matches.filter((entry) => {
+        return normalizeLookupKeyword(entry.title) === normalizeLookupKeyword(keyword);
+      });
+
+      if (exactMatches.length === 1) {
+        return c.json(readingReviewModal(exactMatches[0].title, exactMatches[0].slug));
+      }
+
+      if (matches.length === 1) {
+        return c.json(readingReviewModal(matches[0].title, matches[0].slug));
+      }
+
+      const lines = matches.map((entry, index) => {
+        const author = entry.author ? `｜${entry.author}` : '';
+        return `${index + 1}. ${entry.title}${author}｜slug: ${entry.slug}`;
+      });
+
+      return c.json({
+        type: 4,
+        data: {
+          content: `找到多筆符合「${keyword}」的作品，請把關鍵字輸入得更完整一點：\n\n${lines.join('\n')}`,
+          flags: 64,
+        },
+      });
+    }
+
+    if (commandKey === 'reading_status') {
+      const keyword = extractOptionValue(options, 'title')?.trim();
+      const status = extractOptionValue(options, 'status')?.trim();
+      if (!keyword || !status) {
+        return c.json({ type: 4, data: { content: '❌ 請提供作品名與新狀態', flags: 64 } });
+      }
+      const matches = await findReadingEntriesByTitle(db, keyword, 5);
+      const entry = matches[0];
+      if (!entry) {
+        return c.json({ type: 4, data: { content: `❌ 找不到「${keyword}」`, flags: 64 } });
+      }
+      await updateReadingEntry(db, entry.id, { read_status: status as 'completed' | 'ongoing' | 'dropped' });
+      return c.json({
+        type: 4,
+        data: {
+          content: `✅ 已把「${entry.title}」改成${labelReadStatus(status)}`,
+          flags: 64,
+        },
+      });
+    }
+
+    if (commandKey === 'reading_list') {
+      const keyword = extractOptionValue(options, 'keyword')?.trim();
+      const status = extractOptionValue(options, 'status')?.trim();
+      const entries = keyword
+        ? await findReadingEntriesByTitle(db, keyword, 10)
+        : await listReadingEntries(db, {
+            read_status: status as 'completed' | 'ongoing' | 'dropped' | undefined,
+            sort: 'read_at',
+            limit: 10,
+          });
+
+      if (entries.length === 0) {
+        return c.json({ type: 4, data: { content: '目前沒有符合條件的閱讀記錄。', flags: 64 } });
+      }
+
+      const lines = entries.map((entry, index) => {
+        const score = entry.score != null ? `｜${entry.score.toFixed(1)}` : '';
+        const author = entry.author ? `｜${entry.author}` : '';
+        return `${index + 1}. ${entry.title}${author}｜${entry.read_status}${score}`;
+      });
+
+      return c.json({
+        type: 4,
+        data: {
+          content: `閱讀清單\n\n${lines.join('\n')}`,
           flags: 64,
         },
       });
@@ -393,6 +645,75 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
       ).bind(name, bio, JSON.stringify(links)).run();
 
       return c.json({ type: 4, data: { content: `✅ 個人資料已更新`, flags: 64 } });
+    }
+
+    if (customId === 'reading_create_modal') {
+      const get = (id: string) =>
+        (components as DiscordModalRow[])
+          .flatMap((row) => row.components ?? [])
+          .find((component) => component.custom_id === id)?.value || '';
+
+      const title = get('title').trim();
+      const author = get('author').trim();
+      const genre = get('genre').trim() as 'bl' | 'bg' | 'gl' | 'gen';
+      const medium = (get('medium').trim() || 'novel') as
+        | 'novel'
+        | 'comic'
+        | 'manhwa'
+        | 'manga'
+        | 'webtoon'
+        | 'drama';
+      const status = get('status').trim() as 'completed' | 'ongoing' | 'dropped';
+
+      if (!title) {
+        return c.json({ type: 4, data: { content: '❌ 作品名不能為空', flags: 64 } });
+      }
+
+      const result = await createReadingEntry(db, {
+        title,
+        author: author || undefined,
+        genre,
+        medium,
+        read_status: status,
+        source: 'discord',
+      });
+
+      return c.json({
+        type: 4,
+        data: {
+          content: `✅ 已新增閱讀記錄：${title}\n/reading/${result.slug}`,
+          flags: 64,
+        },
+      });
+    }
+
+    if (customId.startsWith('reading_review_modal:')) {
+      const slug = customId.slice('reading_review_modal:'.length);
+      const entry = await findReadingEntriesByTitle(db, slug, 1);
+      const target =
+        entry[0]?.slug === slug ? entry[0] : (await listReadingEntries(db, { limit: 500 })).find((item) => item.slug === slug);
+      if (!target) {
+        return c.json({ type: 4, data: { content: '❌ 找不到此閱讀記錄', flags: 64 } });
+      }
+
+      const get = (id: string) =>
+        (components as DiscordModalRow[])
+          .flatMap((row) => row.components ?? [])
+          .find((component) => component.custom_id === id)?.value || '';
+
+      await updateReadingEntry(db, target.id, {
+        short_review: get('short_review').trim() || null,
+        blurb: get('blurb').trim() || null,
+        detail_review: get('detail_review').trim() || null,
+      });
+
+      return c.json({
+        type: 4,
+        data: {
+          content: `✅ 已更新「${target.title}」的心得`,
+          flags: 64,
+        },
+      });
     }
 
     return c.json({ type: 4, data: { content: '❌ 未知的表單提交', flags: 64 } });
