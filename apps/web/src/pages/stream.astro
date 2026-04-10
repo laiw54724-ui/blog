@@ -126,7 +126,10 @@ applyPageCacheHeaders(Astro.response, 'stream')
   .posts-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #dddaf0);
+    border-radius: 14px;
+    overflow: hidden;
   }
 
   .empty-state {
@@ -136,7 +139,7 @@ applyPageCacheHeaders(Astro.response, 'stream')
   }
 
   .post-item {
-    display: contents;
+    display: block;
   }
 
   .post-item[hidden] {
