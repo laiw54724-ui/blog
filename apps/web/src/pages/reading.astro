@@ -408,17 +408,20 @@ const jsonData = JSON.stringify(
   .toolbar-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
   .toolbar-filters select {
-    padding: 0.48rem 0.7rem;
+    appearance: none;
+    padding: 0.48rem 2rem 0.48rem 0.85rem;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 0.87rem;
+    border-radius: 999px;
+    font-size: 0.84rem;
     color: var(--text);
-    background: var(--surface);
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a88a8' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 0.7rem center;
     cursor: pointer;
     outline: none;
+    transition: border-color 0.15s;
   }
 
   .toolbar-filters select:focus { border-color: var(--accent); }
+  .toolbar-filters select:hover { border-color: var(--accent); }
 
   .reading-count {
     font-size: 0.82rem;
