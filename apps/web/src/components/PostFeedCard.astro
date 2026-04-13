@@ -25,7 +25,22 @@ const {
   stats,
 } = Astro.props
 
-const hasExcerpt = Boolean(excerpt && excerpt !== title)
+function buildBodyText(titleText: string, excerptText: string): string {
+  const cleanTitle = titleText.trim()
+  const cleanExcerpt = excerptText.trim()
+
+  if (!cleanExcerpt) {
+    return cleanTitle
+  }
+
+  if (!cleanTitle || cleanExcerpt === cleanTitle) {
+    return cleanExcerpt
+  }
+
+  return cleanExcerpt
+}
+
+const bodyText = buildBodyText(title, excerpt)
 const hasCover = Boolean(coverUrl)
 ---
 
@@ -46,8 +61,7 @@ const hasCover = Boolean(coverUrl)
 
   <!-- Body: text -->
   <a href={href} class="feed-body">
-    {title && <p class="feed-title">{title}</p>}
-    {hasExcerpt && <p class="feed-excerpt">{excerpt}</p>}
+    {bodyText && <p class="feed-content">{bodyText}</p>}
   </a>
 
   <!-- Cover image -->
@@ -154,35 +168,29 @@ const hasCover = Boolean(coverUrl)
     color: inherit;
   }
 
-  .feed-body:hover .feed-title {
+  .feed-body:hover .feed-content {
     color: var(--accent, #5b74c8);
   }
 
-  .feed-title {
-    font-size: 0.98rem;
-    font-weight: 600;
+  .feed-content {
+    font-size: 1rem;
+    font-weight: 400;
     color: var(--text, #26253a);
-    margin: 0 0 0.45rem;
-    line-height: 1.5;
-    transition: color 0.15s;
-  }
-
-  .feed-excerpt {
-    font-size: 0.88rem;
-    color: var(--text-muted, #8a88a8);
     margin: 0;
-    line-height: 1.65;
+    line-height: 1.85;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
     overflow: hidden;
+    transition: color 0.15s;
   }
 
   /* ── Cover image ── */
   .feed-image-wrap {
-    width: calc(100% + 2.2rem);
-    margin: 0 -1.1rem;
+    margin: 0 1.1rem 0.9rem;
     overflow: hidden;
+    border-radius: 18px;
+    border: 1px solid rgba(221, 218, 240, 0.9);
   }
 
   .feed-image-link {
@@ -193,6 +201,8 @@ const hasCover = Boolean(coverUrl)
     width: 100%;
     height: auto;
     display: block;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
   }
 
   .feed-image-link:hover .feed-cover {
@@ -233,6 +243,16 @@ const hasCover = Boolean(coverUrl)
 
     .feed-body {
       padding: 0 1rem 0.8rem;
+    }
+
+    .feed-content {
+      font-size: 0.96rem;
+      line-height: 1.8;
+    }
+
+    .feed-image-wrap {
+      margin: 0 1rem 0.8rem;
+      border-radius: 16px;
     }
 
     .feed-footer {

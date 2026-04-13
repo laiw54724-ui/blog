@@ -8,6 +8,7 @@ import type { CommandPreset } from '../presets';
 
 /** Discord Modal response (type 9) */
 export function openCreateModal(preset: CommandPreset, commandKey: string) {
+  const isFeedStylePost = commandKey === 'post' || commandKey === 'travel';
   const titles: Record<string, string> = {
     post: '新增貼文',
     article: '新增文章',
@@ -28,20 +29,22 @@ export function openCreateModal(preset: CommandPreset, commandKey: string) {
       custom_id: `create:${commandKey}`,
       title: titles[commandKey] || '新增內容',
       components: [
-        {
-          type: 1, // ACTION_ROW
-          components: [
-            {
-              type: 4, // TEXT_INPUT
-              custom_id: 'title',
-              label: '標題（選填）',
-              style: 1, // SHORT
-              required: false,
-              max_length: 200,
-              placeholder: '留空會自動從內容擷取',
-            },
-          ],
-        },
+        ...(!isFeedStylePost
+          ? [{
+              type: 1,
+              components: [
+                {
+                  type: 4,
+                  custom_id: 'title',
+                  label: '標題（選填）',
+                  style: 1,
+                  required: false,
+                  max_length: 200,
+                  placeholder: '留空會自動從內容擷取',
+                },
+              ],
+            }]
+          : []),
         {
           type: 1,
           components: [

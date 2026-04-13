@@ -1,16 +1,59 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro'
 import EntryCard from '../../components/EntryCard.astro'
-import { getArticles, getEntriesByCategory, getEntriesByTagSlug, getEntriesByTagSlugs, getPopularTags } from '../../lib/data'
+import {
+  getArticles,
+  getEntriesByCategory,
+  getEntriesByTagSlug,
+  getEntriesByTagSlugs,
+  getPopularTags,
+  getReadingEntries,
+} from '../../lib/data'
 import { buildEntryCardModels, groupTagSummaries } from '../../lib/presenters'
-import { getSeriesDefinition, SERIES_DEFINITIONS } from '../../lib/series'
+import { getSeriesDefinition } from '../../lib/series'
 import { applyPageCacheHeaders } from '../../lib/response'
-import { normalizeTagInput } from '@personal-blog/shared'
+import { formatDate, normalizeTagInput, type TagSummary } from '@personal-blog/shared'
+import { extractPlainText } from '../../lib/markdown'
+import { buildReadingTagSummaries, hasDetailedReadingReview, parseReadingTags } from '../../lib/reading'
 
-export async function getStaticPaths() {
-  return SERIES_DEFINITIONS.map((series) => ({
-    params: { slug: series.slug },
-  }))
+function mergeTagCounts(tagGroups: Awaited<ReturnType<typeof getPopularTags>>[]) {
+  const merged = new Map<string, Awaited<ReturnType<typeof getPopularTags>>[number]>()
+
+  for (const tags of tagGroups) {
+    for (const tag of tags) {
+      const existing = merged.get(tag.slug)
+      if (existing) {
+        existing.entry_count += tag.entry_count
+        continue
+      }
+      merged.set(tag.slug, { ...tag })
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => {
+    if (b.entry_count !== a.entry_count) return b.entry_count - a.entry_count
+    return a.name.localeCompare(b.name, 'zh-TW')
+  })
+}
+
+function mergeSummaryCounts(groups: TagSummary[][]) {
+  const merged = new Map<string, TagSummary>()
+
+  for (const tags of groups) {
+    for (const tag of tags) {
+      const existing = merged.get(tag.slug)
+      if (existing) {
+        existing.entry_count += tag.entry_count
+        continue
+      }
+      merged.set(tag.slug, { ...tag })
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => {
+    if (b.entry_count !== a.entry_count) return b.entry_count - a.entry_count
+    return a.name.localeCompare(b.name, 'zh-TW')
+  })
 }
 
 const slug = Astro.params.slug || ''
@@ -42,7 +85,58 @@ if (entries.length === 0 && !selectedTag) {
 }
 
 const cardModels = await buildEntryCardModels(entries, { excerptLength: 140 })
-const tagPool = await getPopularTags({ type: 'article', limit: 50 })
+const reviewReadingEntries =
+  series.slug === 'reviews'
+    ? (await getReadingEntries({ sort: 'read_at' })).filter((entry) => {
+        if (!hasDetailedReadingReview(entry)) {
+          return false
+        }
+
+        if (!selectedTag) {
+          return true
+        }
+
+        const normalizedSelectedTag = normalizeTagInput(selectedTag).slug
+        return parseReadingTags(entry.tags)
+          .map((tag) => normalizeTagInput(tag).slug)
+          .includes(normalizedSelectedTag)
+      })
+    : []
+
+const readingReviewModels = reviewReadingEntries.map((entry) => ({
+  id: entry.id,
+  href: `/reading/${entry.slug}`,
+  title: entry.title,
+  excerpt: extractPlainText(
+    entry.short_review?.trim() || entry.detail_review?.trim() || entry.blurb?.trim() || '',
+    140
+  ),
+  date: formatDate(entry.read_at || entry.updated_at || entry.created_at),
+  rawDate: entry.read_at || entry.updated_at || entry.created_at,
+  typeLabel: '閱讀心得',
+  stats: {
+    comment_count: 0,
+    clap_count: 0,
+    view_count: 0,
+  },
+}))
+const mergedCardModels = [...cardModels, ...readingReviewModels].sort((a, b) => {
+  return new Date(b.rawDate).getTime() - new Date(a.rawDate).getTime()
+})
+const articleTagPool =
+  series.fallbackCategories && series.fallbackCategories.length > 0
+    ? mergeTagCounts(
+        await Promise.all(
+          series.fallbackCategories.map((category) =>
+            getPopularTags({ type: 'article', category, limit: 50 })
+          )
+        )
+      )
+    : await getPopularTags({ type: 'article', limit: 50 })
+const tagPool =
+  series.slug === 'reviews'
+    ? mergeSummaryCounts([articleTagPool, buildReadingTagSummaries(reviewReadingEntries)])
+    : articleTagPool
 const groupedTags = groupTagSummaries(tagPool).filter((group) => series.relevantTagGroups.includes(group.key))
 const activeTag = selectedTag ? normalizeTagInput(selectedTag) : null
 
@@ -77,17 +171,19 @@ applyPageCacheHeaders(Astro.response, 'articles')
 
     <div class="series-layout">
       <section class="series-main">
-        {cardModels.length > 0 ? (
+        {mergedCardModels.length > 0 ? (
           <div class="series-list">
-            {cardModels.map((vm) => (
+            {mergedCardModels.map((vm) => (
               <EntryCard
                 href={vm.href}
-                title={vm.displayTitle}
-                excerpt={vm.displayExcerpt}
-                date={vm.displayDate}
-                coverUrl={vm.coverUrl}
-                coverAlt={vm.coverAlt}
-                stats={vm.metrics}
+                title={'displayTitle' in vm ? vm.displayTitle : vm.title}
+                excerpt={'displayExcerpt' in vm ? vm.displayExcerpt : vm.excerpt}
+                date={'displayDate' in vm ? vm.displayDate : vm.date}
+                coverUrl={'coverUrl' in vm ? vm.coverUrl : undefined}
+                coverAlt={'coverAlt' in vm ? vm.coverAlt : undefined}
+                stats={'metrics' in vm ? vm.metrics : vm.stats}
+                typeLabel={'typeLabel' in vm ? vm.typeLabel : undefined}
+                showTypeBadge={Boolean('typeLabel' in vm && vm.typeLabel)}
                 variant="list"
               />
             ))}

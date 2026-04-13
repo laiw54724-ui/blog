@@ -4,6 +4,7 @@ compatibility_date = "2024-04-05"
 
 [vars]
 DISCORD_APPLICATION_ID = "1491052368626843668"
+LOCKED_TAG_SLUGS = ""
 
 [[d1_databases]]
 binding = "DB"

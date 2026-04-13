@@ -1,0 +1,180 @@
+<h2>貼文卡片圖片樣式</h2>
+<p class="subtitle">三種方向，主要差異在圖片呈現方式。點選你偏好的。</p>
+
+<style>
+/* Reset for mockup cards */
+.demo-feed { display: flex; flex-direction: column; gap: 1.5rem; max-width: 520px; margin: 0 auto; }
+
+/* ── A: Current (card + contain) ── */
+.card-a {
+  background: #fff;
+  border: 1px solid #dddaf0;
+  border-radius: 14px;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+}
+.card-header {
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.85rem 1.1rem 0.6rem;
+}
+.avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #5b74c8; color: #fff; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem; flex-shrink: 0;
+}
+.meta { font-size: 0.82rem; color: #888; }
+.meta strong { color: #26253a; margin-right: 0.35rem; }
+.card-text { padding: 0 1.1rem 0.8rem; font-size: 0.92rem; color: #26253a; line-height: 1.6; }
+.card-text p { margin: 0; }
+.card-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.5rem 1.1rem; border-top: 1px solid #eee;
+  font-size: 0.78rem; color: #999;
+}
+.card-footer a { color: #5b74c8; text-decoration: none; font-weight: 500; }
+
+/* A: contain image */
+.img-contain-wrap {
+  border-top: 1px solid #eee;
+  background: #f7f7fb;
+  display: flex; align-items: center; justify-content: center;
+  height: 220px; overflow: hidden;
+}
+.img-contain-wrap .sim-img {
+  height: 180px; width: 140px;
+  background: linear-gradient(135deg, #e0d8f8 0%, #c5cef8 100%);
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; color: #7a78a8;
+}
+
+/* B: Threads-style (no border, divider, full natural width) */
+.card-b {
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.8rem;
+  font-family: system-ui, sans-serif;
+}
+.img-natural-wrap .sim-img-wide {
+  width: 100%; height: 260px;
+  background: linear-gradient(135deg, #d8f0e8 0%, #c5e8f8 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; color: #4a8870;
+  margin-top: 0.75rem;
+}
+.card-b .card-footer { border-top: none; padding: 0.5rem 0 0; }
+.card-b .card-text { padding: 0 0 0.5rem; }
+.card-b .card-header { padding: 0.85rem 0 0.5rem; }
+
+/* C: Hybrid (card look + natural ratio, no grey bg) */
+.card-c {
+  background: #fff;
+  border: 1px solid #dddaf0;
+  border-radius: 14px;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+}
+.img-fill-wrap {
+  border-top: 1px solid #eee;
+  overflow: hidden;
+}
+.img-fill-wrap .sim-img-fill {
+  width: 100%; height: 220px;
+  background: linear-gradient(135deg, #f8e0d8 0%, #f8c5d0 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; color: #a07080;
+  object-fit: cover;
+}
+
+.stats { display: flex; gap: 1rem; color: #999; font-size: 0.8rem; }
+
+.note {
+  background: #fff9e0;
+  border-left: 3px solid #e8c800;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  color: #7a6000;
+  margin-top: 0.4rem;
+  border-radius: 0 6px 6px 0;
+}
+</style>
+
+<div class="cards" style="max-width:680px;margin:0 auto;">
+
+  <!-- A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 1rem;">
+      <div class="label" style="margin-bottom:0.6rem;">A — 現在的樣式</div>
+      <div class="card-a">
+        <div class="card-header">
+          <div class="avatar">被</div>
+          <div class="meta"><strong>被被子</strong> · 2026年4月9日</div>
+        </div>
+        <div class="card-text"><p>校園記事｜很喜歡我們學校飲料店的店員…</p></div>
+        <div class="img-contain-wrap">
+          <div class="sim-img">圖片（contain，灰底）</div>
+        </div>
+        <div class="card-footer">
+          <div class="stats"><span>♡ 4</span><span>🗨 4</span><span>◎ 18</span></div>
+          <a href="#">閱讀全文 →</a>
+        </div>
+      </div>
+      <div class="note">問題：直立圖片兩側留白多，橫幅圖片也被限高截死</div>
+    </div>
+    <div class="card-body">
+      <h3>Card + contain</h3>
+      <p>現有設計。圖片 object-fit: contain，高度固定 320px，灰色背景填滿剩餘空間。</p>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 1rem;">
+      <div class="label" style="margin-bottom:0.6rem;">B — Threads 風格</div>
+      <div class="card-b">
+        <div class="card-header">
+          <div class="avatar">被</div>
+          <div class="meta"><strong>被被子</strong> · 2026年4月9日</div>
+        </div>
+        <div class="card-text"><p>校園記事｜很喜歡我們學校飲料店的店員…</p></div>
+        <div class="img-natural-wrap">
+          <div class="sim-img-wide">圖片（自然比例，全寬無邊框）</div>
+        </div>
+        <div class="card-footer">
+          <div class="stats"><span>♡ 4</span><span>🗨 4</span><span>◎ 18</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Feed 流 + 自然比例</h3>
+      <p>移除卡片邊框，改用細分隔線。圖片自然比例全寬顯示，沒有裁切也沒有灰底。貼文之間用 divider 隔開而非 border。</p>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 1rem;">
+      <div class="label" style="margin-bottom:0.6rem;">C — 折衷：保留卡片，修圖片</div>
+      <div class="card-c">
+        <div class="card-header">
+          <div class="avatar">被</div>
+          <div class="meta"><strong>被被子</strong> · 2026年4月9日</div>
+        </div>
+        <div class="card-text"><p>校園記事｜很喜歡我們學校飲料店的店員…</p></div>
+        <div class="img-fill-wrap">
+          <div class="sim-img-fill">圖片（object-fit: cover，自動填滿）</div>
+        </div>
+        <div class="card-footer">
+          <div class="stats"><span>♡ 4</span><span>🗨 4</span><span>◎ 18</span></div>
+          <a href="#">閱讀全文 →</a>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Card + cover（折衷）</h3>
+      <p>保留卡片邊框和圓角，但圖片改成 object-fit: cover，讓圖片填滿固定高度不留白。會有輕微裁切，但視覺上更乾淨。</p>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文章頁樣式對比</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+  background: #1a1828;
+  padding: 2rem 1rem 4rem;
+}
+h2 {
+  text-align: center; color: #9892ae;
+  font-size: 0.85rem; font-weight: 500;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 1.5rem;
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Shared card wrapper ── */
+.demo {
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: border-color 0.2s, transform 0.15s;
+}
+.demo:hover { transform: translateY(-2px); }
+.demo.selected { border-color: #7c6af0; }
+.demo-label {
+  text-align: center;
+  padding: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #9892ae;
+  background: #12101e;
+}
+
+/* ════════════════════════════════
+   A: CURRENT STYLE
+════════════════════════════════ */
+.style-a {
+  background: #fff;
+  padding: 2rem 1.5rem;
+  font-family: system-ui, sans-serif;
+}
+.a-kicker { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: #9892ae; margin-bottom: 0.5rem; }
+.a-title { font-size: 2.2rem; font-weight: 800; color: #26253a; line-height: 1.1; margin-bottom: 0.5rem; }
+.a-desc { font-size: 0.9rem; color: #8a88a8; margin-bottom: 1.2rem; }
+.a-btn { display: inline-block; padding: 0.4rem 1rem; border: 1px solid #c8ccf0; border-radius: 999px; font-size: 0.83rem; color: #5b74c8; }
+.a-divider { border: none; border-top: 1px solid #e8e4f4; margin: 1.2rem 0; }
+.a-cats { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.6rem; margin-bottom: 1.2rem; }
+.a-cat { border: 1px solid #dddaf0; border-radius: 10px; padding: 0.8rem; }
+.a-cat-en { font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: #5b74c8; margin-bottom: 0.3rem; }
+.a-cat-zh { font-size: 0.95rem; font-weight: 700; color: #5b74c8; margin-bottom: 0.25rem; }
+.a-cat-desc { font-size: 0.72rem; color: #8a88a8; line-height: 1.45; }
+.a-main { display: grid; grid-template-columns: 1fr 260px; gap: 1rem; }
+.a-article-date { font-size: 0.78rem; color: #9892ae; margin-bottom: 0.4rem; }
+.a-article-title { font-size: 1.15rem; font-weight: 700; color: #5b74c8; margin-bottom: 0.45rem; line-height: 1.4; }
+.a-article-excerpt { font-size: 0.82rem; color: #5b74c8; line-height: 1.6; margin-bottom: 0.5rem; }
+.a-article-stats { font-size: 0.75rem; color: #9892ae; }
+.a-sidebar-box { border: 1px solid #dddaf0; border-radius: 10px; padding: 0.9rem; }
+.a-sidebar-kicker { font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: #8a88a8; margin-bottom: 0.3rem; }
+.a-sidebar-name { font-size: 1.05rem; font-weight: 700; color: #26253a; margin-bottom: 0.2rem; }
+.a-sidebar-desc { font-size: 0.8rem; color: #8a88a8; }
+
+/* ════════════════════════════════
+   B: TARGET STYLE
+════════════════════════════════ */
+.style-b {
+  background: #f4f0ea;
+  padding: 2rem 1.5rem;
+  font-family: 'Georgia', 'Noto Serif TC', serif;
+}
+.b-kicker { font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: #9a927a; margin-bottom: 0.5rem; font-family: system-ui, sans-serif; }
+.b-title { font-size: 3.4rem; font-weight: 800; color: #1e1c14; line-height: 1.0; margin-bottom: 0.55rem; letter-spacing: -0.02em; }
+.b-desc { font-size: 0.95rem; color: #6a6254; margin-bottom: 1.3rem; font-family: system-ui, sans-serif; line-height: 1.6; }
+.b-btn { display: inline-block; padding: 0.45rem 1.2rem; border: 1px solid #c4bca8; border-radius: 999px; font-size: 0.83rem; color: #4a5a9a; font-family: system-ui, sans-serif; background: rgba(255,255,255,0.5); }
+.b-divider { border: none; border-top: 1px solid #d8d0c0; margin: 1.4rem 0; }
+.b-cats { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.75rem; margin-bottom: 1.4rem; }
+.b-cat { border: 1px solid #d0c8b4; border-radius: 14px; padding: 1.1rem 0.95rem; background: rgba(255,255,255,0.45); }
+.b-cat-en { font-size: 0.65rem; letter-spacing: 0.14em; text-transform: uppercase; color: #7a7264; margin-bottom: 0.45rem; font-family: system-ui, sans-serif; }
+.b-cat-zh { font-size: 1.1rem; font-weight: 800; color: #1e1c14; margin-bottom: 0.4rem; }
+.b-cat-desc { font-size: 0.76rem; color: #6a6254; line-height: 1.55; font-family: system-ui, sans-serif; }
+.b-main { display: grid; grid-template-columns: 1fr 220px; gap: 1.5rem; }
+.b-article-date { font-size: 0.8rem; color: #8a8272; margin-bottom: 0.5rem; font-family: system-ui, sans-serif; }
+.b-article-title { font-size: 1.45rem; font-weight: 800; color: #1e1c14; margin-bottom: 0.5rem; line-height: 1.35; }
+.b-article-excerpt { font-size: 0.85rem; color: #5a5448; line-height: 1.7; margin-bottom: 0.55rem; font-family: system-ui, sans-serif; }
+.b-article-stats { font-size: 0.76rem; color: #9a9284; font-family: system-ui, sans-serif; }
+.b-sidebar-box { border: 1px solid #d0c8b4; border-radius: 12px; padding: 1rem; background: rgba(255,255,255,0.45); }
+.b-sidebar-kicker { font-size: 0.65rem; letter-spacing: 0.14em; text-transform: uppercase; color: #8a8272; margin-bottom: 0.4rem; font-family: system-ui, sans-serif; }
+.b-sidebar-name { font-size: 1.15rem; font-weight: 800; color: #1e1c14; margin-bottom: 0.25rem; }
+.b-sidebar-desc { font-size: 0.82rem; color: #6a6254; font-family: system-ui, sans-serif; }
+
+/* Selected indicator */
+.selected-badge {
+  display: none;
+  text-align: center;
+  background: #7c6af0;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem;
+  letter-spacing: 0.05em;
+}
+.demo.selected .selected-badge { display: block; }
+</style>
+</head>
+<body>
+<h2>文章頁 — 現在 vs 目標樣式</h2>
+
+<div class="compare">
+
+  <!-- A: Current -->
+  <div class="demo" id="demoA" onclick="select('a')">
+    <div class="demo-label">A — 現在</div>
+    <div class="style-a">
+      <div class="a-kicker">Category Index</div>
+      <div class="a-title">文章</div>
+      <div class="a-desc">整理過、值得回頭翻找的長文、心得與評論。</div>
+      <span class="a-btn">搜尋文章</span>
+      <hr class="a-divider">
+      <div class="a-cats">
+        <div class="a-cat">
+          <div class="a-cat-en">Personal Log</div>
+          <div class="a-cat-zh">日記</div>
+          <div class="a-cat-desc">比較靠近生活內側的整理、回看與自我備忘。</div>
+        </div>
+        <div class="a-cat">
+          <div class="a-cat-en">Fiction Shelf</div>
+          <div class="a-cat-zh">作品</div>
+          <div class="a-cat-desc">以作品、設定、角色關係為中心的創作整理頁。</div>
+        </div>
+        <div class="a-cat">
+          <div class="a-cat-en">Notes & Reviews</div>
+          <div class="a-cat-zh">評論書摘</div>
+          <div class="a-cat-desc">讀書筆記、評論、書摘與可回頭查找的知識型文章。</div>
+        </div>
+        <div class="a-cat">
+          <div class="a-cat-en">Places & Play</div>
+          <div class="a-cat-zh">遊玩</div>
+          <div class="a-cat-desc">遊玩、出門、地點與途中發生的小型探索。</div>
+        </div>
+      </div>
+      <div class="a-main">
+        <div>
+          <div class="a-article-date">2026年4月9日</div>
+          <div class="a-article-title">《先想個辦法越河》BY落回【完結】</div>
+          <div class="a-article-excerpt">簡介：請吃網遊直辦彎越和一朝網戀被騙，萌萌女友變成夾著嗓子的男人，屢屢發誓再也不會網戀了…</div>
+          <div class="a-article-stats">留言 0　拍手 0　閱讀 0</div>
+        </div>
+        <div>
+          <div class="a-sidebar-box">
+            <div class="a-sidebar-kicker">About</div>
+            <div class="a-sidebar-name">被被子</div>
+            <div class="a-sidebar-desc">沉迷實作各種小垃圾</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="selected-badge">✓ 選擇</div>
+  </div>
+
+  <!-- B: Target -->
+  <div class="demo" id="demoB" onclick="select('b')">
+    <div class="demo-label">B — 目標樣式</div>
+    <div class="style-b">
+      <div class="b-kicker">Category Index</div>
+      <div class="b-title">文章</div>
+      <div class="b-desc">整理過、值得回頭翻找的長文、心得與評論。</div>
+      <span class="b-btn">搜尋文章</span>
+      <hr class="b-divider">
+      <div class="b-cats">
+        <div class="b-cat">
+          <div class="b-cat-en">Personal Log</div>
+          <div class="b-cat-zh">日記</div>
+          <div class="b-cat-desc">比較靠近生活內側的整理、回看與自我備忘。</div>
+        </div>
+        <div class="b-cat">
+          <div class="b-cat-en">Fiction Shelf</div>
+          <div class="b-cat-zh">作品</div>
+          <div class="b-cat-desc">以作品、設定、角色關係為中心的創作整理頁。</div>
+        </div>
+        <div class="b-cat">
+          <div class="b-cat-en">Notes & Reviews</div>
+          <div class="b-cat-zh">評論書摘</div>
+          <div class="b-cat-desc">讀書筆記、評論、書摘與可回頭查找的知識型文章。</div>
+        </div>
+        <div class="b-cat">
+          <div class="b-cat-en">Places & Play</div>
+          <div class="b-cat-zh">遊玩</div>
+          <div class="b-cat-desc">遊玩、出門、地點與途中發生的小型探索。</div>
+        </div>
+      </div>
+      <div class="b-main">
+        <div>
+          <div class="b-article-date">2026年4月9日</div>
+          <div class="b-article-title">《先想個辦法越河》BY落回【完結】</div>
+          <div class="b-article-excerpt">簡介：請吃網遊直辦彎越和一朝網戀被騙，萌萌女友變成夾著嗓子的男人，屢屢發誓再也不會網戀了…</div>
+          <div class="b-article-stats">留言 0　拍手 0　閱讀 0</div>
+        </div>
+        <div>
+          <div class="b-sidebar-box">
+            <div class="b-sidebar-kicker">About</div>
+            <div class="b-sidebar-name">被被子</div>
+            <div class="b-sidebar-desc">沉迷實作各種小垃圾</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="selected-badge">✓ 選擇</div>
+  </div>
+
+</div>
+
+<script>
+function select(choice) {
+  document.querySelectorAll('.demo').forEach(d => d.classList.remove('selected'));
+  document.getElementById('demo' + choice.toUpperCase()).classList.add('selected');
+  if (window.__companion) window.__companion.recordClick(choice, choice === 'a' ? '現在的樣式' : '目標樣式');
+}
+</script>
+</body>
+</html>

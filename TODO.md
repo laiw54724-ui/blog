@@ -5,11 +5,30 @@
 品質指標全綠：
 - `npm run lint` — 0 errors
 - `npm test` — 167 tests passed
-- `npm run typecheck` — 0 errors
+- `apps/api` typecheck — pass
+
+環境基線已補：
+- `.nvmrc` / `.node-version` = `22.12.0`
+- `npm run check:node`
+- CI 改為讀 `.nvmrc`
 
 ---
 
 ## 🔴 第 2 週優先
+
+### reading 功能定稿與產品化
+
+- [ ] 資料模型與欄位定稿
+- [ ] 篩選 / 排序 URL 化
+- [ ] 詳頁與列表關係整理
+- [ ] 空狀態與錯誤狀態整理
+- [ ] 評估 server-side filter / pagination
+
+### 前端效能與資料策略
+
+- [ ] `/stream` 改成更輕的資料載入方式，避免先 render 全部再隱藏
+- [ ] `/article/[slug]` 的上下篇查詢改成 API 支援，不再抓全部文章
+- [ ] 釐清 Astro SSR / prerender 策略，處理目前 `getStaticPaths()` 誤導
 
 ### `/admin` 管理入口
 
@@ -17,16 +36,15 @@
 - [ ] 貼文 / 文章列表（狀態篩選、slug、visibility、建立時間）
 - [ ] 基本批次操作回饋
 
-### Discord 建立流程補欄位
-
-目前 `/貼文` 和 `/文章` modal 缺少：
-- [ ] `visibility`（public / unlisted / private）
-- [ ] `tags`（逗號分隔）
-- [ ] 是否立即公開（checkbox）
-
 ---
 
 ## 🟡 中優先
+
+### locked content / tag policy
+
+- [ ] locked tag 規則擴充到搜尋 / 系列頁 / 其他詳頁
+- [ ] 決定是否讓 `post` 詳頁也共用密碼保護
+- [ ] 被鎖 tag 的公開呈現規則再收斂
 
 ### 貼文升格文章
 
@@ -34,11 +52,12 @@
 - [ ] 或 web 端操作按鈕
 - [ ] 升格後 type 改為 article、slug 重新計算
 
-### 內容管理
+### 資產與前端體驗
 
 - [ ] 圖片 lightbox（目前 gallery 有「預覽」按鈕但無實作）
 - [ ] 文章 og:image 動態生成（目前用靜態 default）
 - [ ] RSS 描述去除更多 Markdown 語法殘留
+- [ ] 字型與 KaTeX 重資產策略優化
 
 ---
 
@@ -55,8 +74,9 @@
 
 - [ ] `npm run lint` 全綠
 - [ ] `npm test` 全綠
-- [ ] `npm run typecheck` 全綠
-- [ ] 主要頁面可瀏覽（/ / about / stream / articles / post / article）
-- [ ] Discord 建立流程可跑
+- [ ] `npm run check:node` 通過
+- [ ] typecheck 在正確 Node 22 環境可重現
+- [ ] 主要頁面可瀏覽（/ / about / stream / articles / reading / post / article）
+- [ ] Discord 建立與管理流程可跑
 - [ ] RSS 與 sitemap 可存取
 - [ ] 文件與功能一致（README / docs/routes.md）

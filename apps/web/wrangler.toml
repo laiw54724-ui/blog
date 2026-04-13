@@ -3,6 +3,8 @@ compatibility_date = "2026-03-29"
 
 [vars]
 PUBLIC_API_URL = "https://personal-blog-api.personal-blog.workers.dev"
+LOCKED_TAG_SLUGS = ""
+CONTENT_LOCK_PASSWORD = ""
 
 # Service binding to API worker (avoids Worker-to-Worker fetch 404 issue)
 [[services]]

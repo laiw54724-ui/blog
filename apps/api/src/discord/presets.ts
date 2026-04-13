@@ -25,6 +25,10 @@ export const CHINESE_TO_ENGLISH_COMMAND_MAP: Record<string, string> = {
   管理: 'list',
   補圖: 'attach',
   個人資料: 'profile',
+  讀了: 'reading_create',
+  補心得: 'reading_review',
+  改狀態: 'reading_status',
+  書單: 'reading_list',
   help: 'help',
 };
 

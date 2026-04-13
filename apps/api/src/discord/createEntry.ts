@@ -45,7 +45,7 @@ interface DbLike {
 
 type DatabaseLike = D1Database | DbLike;
 
-function parseManualTags(input?: string): string[] {
+export function parseManualTags(input?: string): string[] {
   if (!input) return [];
   return input
     .split(/[,\n]+|\s+/u)
@@ -95,7 +95,7 @@ async function ensureUniqueSlug(db: DatabaseLike, baseSlug: string): Promise<str
 /**
  * Find or create a tag by name, return its ID
  */
-async function findOrCreateTag(db: DatabaseLike, tagName: string): Promise<string> {
+export async function findOrCreateTag(db: DatabaseLike, tagName: string): Promise<string> {
   const normalized = normalizeTagInput(tagName);
   const tagSlug = normalized.slug;
   const existing = await db.prepare('SELECT id FROM tags WHERE slug = ?').bind(tagSlug).first();

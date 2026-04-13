@@ -13,19 +13,21 @@
 
 - Astro 網站與 Cloudflare Web runtime 整合
 - Cloudflare Worker API 與 Discord interaction webhook
-- D1 為主的 entries / comments / profile / assets 資料模型
+- D1 為主的 `entries` / `reading_entries` / comments / profile / assets 資料模型
 - 公開頁面：
   - `/` — 首頁 hero + 最新貼文 / 文章
   - `/about` — 個人頁（banner / avatar / bio / feed）
   - `/stream` — 貼文河道（load more，每次 10 筆）
   - `/articles` — 文章列表 + 系列入口 + 熱門標籤
+  - `/reading` — 閱讀清單列表（排序 / 篩選 / client-side filter）
+  - `/reading/[slug]` — 閱讀詳頁（短評 / 文案 / 詳細心得）
   - `/search` — 全文搜尋，支援 `q` / `type` 過濾
   - `/tags` — 結構標籤 / 自由標籤探索
   - `/tags/[slug]` — 依標籤聚合，貼文 + 文章都顯示
-  - `/series/[slug]` — 四個系列入口（journal / works / reviews / play）
+  - `/series/[slug]` — 四個系列入口（journal / works / reviews / play），`reviews` 可帶入有完整心得的閱讀條目
   - `/c/[category]` — 分類頁
   - `/post/[slug]` — 貼文詳頁（Markdown / 圖片 gallery / 留言）
-  - `/article/[slug]` — 文章詳頁（Markdown + KaTeX / 上下篇導覽）
+  - `/article/[slug]` — 文章詳頁（Markdown + KaTeX / 上下篇導覽 / 可套用內容上鎖）
   - `/rss.xml` — RSS 2.0 feed（貼文 + 文章合併，最新 50 筆）
   - `/sitemap.xml` — XML sitemap
 - API 路由：
@@ -34,9 +36,12 @@
   - `GET /api/entries`、`GET /api/entries/search`
   - `GET /api/entries/slug/:slug`
   - `GET /api/entries/:id`、`PUT`、`DELETE`、`DELETE /hard`
+  - `GET /api/entries/:id/tags`
   - `GET /api/entries/:id/assets`、`/metrics`、`/comments`
   - `GET /api/entries/metrics`（批次）、`/assets`（批次）
   - `POST /api/entries/:id/clap`、`/view`、`/comments`
+  - `GET /api/reading`、`GET /api/reading/:slug`
+  - `POST /api/reading`、`PATCH /api/reading/:id`
   - `GET /api/profile`、`PUT`、`POST /avatar`、`POST /banner`
   - `GET /api/tags`、`GET /api/tags/:slug/entries`
   - `GET /api/assets/*`
@@ -46,18 +51,27 @@
   - Desktop navbar active state
   - Mobile 浮動 MENU 按鈕 + 回頂部
   - 閱讀進度條（post / article 詳頁）
+  - locked tag policy：可用 tag 隱藏閱讀 / 文章內容，輸入密碼後解鎖
   - og:image / canonical / RSS autodiscovery link
 - shared package：types / schema / db helpers / utils
-- 工程檢查全綠：
+- Discord 建立 / 管理：
+  - `/動態`：feed-style modal，不再要求標題欄
+  - `/讀了`：支援 `score`、`read_at`、`tags`、`lock_mode`
+  - `/補心得`：可預填編輯 `score` / `read_at` / `short_review` / `blurb` / `detail_review`
+  - `/書單`：可選單管理閱讀條目，支援 `編輯 / 心得 / 刪除 / 上鎖模式`
+- 工程驗證：
   - `npm run lint` — 0 errors
   - `npm test` — 167 tests passed
-  - `npm run typecheck` — 0 errors
+  - `npm run check:node` — 版本一致性檢查
+  - `apps/api` typecheck 可通過
+  - `apps/web` typecheck 需要在可正常啟動 Cloudflare / Vite plugin 的 Node 22 環境下執行
 
 ### 尚未完成或仍在規劃
 
 - `/admin` — 單作者輕後台（草稿管理、狀態篩選）
 - `/map` — 地點 / 旅行地圖瀏覽
-- Discord 建立流程補欄位（visibility / tags / 是否公開）
+- reading 頁 product 化（URL 化篩選 / 空狀態 / 錯誤狀態 / server-side filter）
+- locked tag policy 擴充到更多入口（搜尋 / 系列頁 / 其他詳頁）
 - 貼文升格文章的完整流程
 - AI 流程與 provider 抽象
 
@@ -103,6 +117,19 @@ docs/
 ```bash
 eval "$(fnm env --shell zsh)"
 fnm use 22.12.0
+```
+
+如果 `fnm current` 已經是 `v22.12.0`，但 `node -v` 還是 `v20.x`，表示目前 shell 沒有載入 `fnm env`。
+請把下面這行加到 `~/.zshrc`，然後重開終端機：
+
+```bash
+eval "$(fnm env --shell zsh)"
+```
+
+專案也提供一個快速檢查：
+
+```bash
+npm run check:node
 ```
 
 ## 常用指令

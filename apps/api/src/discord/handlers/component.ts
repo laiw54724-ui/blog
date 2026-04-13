@@ -14,11 +14,16 @@
  *   bulk_del:id1|id2|id3         → hard delete selected entries
  */
 
-import { getEntryById, archiveEntry, deleteEntry, updateEntry } from '@personal-blog/shared/db';
+import { getEntryById, archiveEntry, deleteEntry, updateEntry, getTagsByEntryId } from '@personal-blog/shared/db';
+import { normalizeTagInput, resolveLockModeTags } from '@personal-blog/shared';
+import {
+  deleteReadingEntry,
+  getReadingEntryBySlug,
+} from '@personal-blog/shared/reading-db';
 import { buildListPayload, parseManageFilterPayload, type ManageFilters } from './list';
 
-/** Build the edit modal pre-filled with current content + status */
-function editModal(entryId: string, entry: any) {
+/** Build the edit modal pre-filled with current content + status + tags */
+function editModal(entryId: string, entry: any, currentTags: string[]) {
   return {
     type: 9, // MODAL
     data: {
@@ -44,12 +49,12 @@ function editModal(entryId: string, entry: any) {
           components: [
             {
               type: 4,
-              custom_id: 'content',
-              label: '內容',
-              style: 2, // PARAGRAPH
-              required: true,
-              max_length: 4000,
-              value: (entry.content_markdown || '').slice(0, 4000),
+              custom_id: 'status',
+              label: '狀態 (draft / published / private / archived)',
+              style: 1,
+              required: false,
+              max_length: 20,
+              value: entry.status || 'draft',
             },
           ],
         },
@@ -58,12 +63,27 @@ function editModal(entryId: string, entry: any) {
           components: [
             {
               type: 4,
-              custom_id: 'status',
-              label: '狀態 (draft / published / private / archived)',
-              style: 1, // SHORT
+              custom_id: 'tags',
+              label: '標籤（逗號或空白分隔，留空清除）',
+              style: 1,
               required: false,
-              max_length: 20,
-              value: entry.status || 'draft',
+              max_length: 200,
+              value: currentTags.join(', '),
+              placeholder: 'setting:travel mood:calm, note',
+            },
+          ],
+        },
+        {
+          type: 1,
+          components: [
+            {
+              type: 4,
+              custom_id: 'content',
+              label: '內容',
+              style: 2, // PARAGRAPH
+              required: true,
+              max_length: 4000,
+              value: (entry.content_markdown || '').slice(0, 4000),
             },
           ],
         },
@@ -125,6 +145,185 @@ function hardDeleteConfirmMessage(entryId: string, title: string) {
               label: '❌ 取消',
               custom_id: 'cancel',
             },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+function parseStoredReadingTags(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+const READING_LOCK_TAGS = ['warning:18plus', 'warning:controversial'];
+
+function detectReadingLockMode(tags: string[]): 'none' | '18plus' | 'controversial' {
+  const normalized = new Set(tags.map((tag) => normalizeTagInput(tag).slug));
+  if (normalized.has('warning:18plus')) return '18plus';
+  if (normalized.has('warning:controversial')) return 'controversial';
+  return 'none';
+}
+
+function replaceReadingLockTags(tags: string[], lockMode: 'none' | '18plus' | 'controversial'): string[] {
+  const withoutLockTags = tags.filter((tag) => {
+    const slug = normalizeTagInput(tag).slug;
+    return !READING_LOCK_TAGS.includes(slug);
+  });
+
+  return Array.from(
+    new Set([...withoutLockTags, ...resolveLockModeTags(lockMode)])
+  );
+}
+
+function labelReadingLockMode(lockMode: 'none' | '18plus' | 'controversial'): string {
+  if (lockMode === '18plus') return '18+';
+  if (lockMode === 'controversial') return '爭議題材';
+  return '未上鎖';
+}
+
+function readingEditModal(slug: string, entry: any) {
+  const withValue = (value?: string | null) => (value ? { value } : {});
+  const tags = parseStoredReadingTags(entry.tags).join(', ');
+
+  return {
+    type: 9,
+    data: {
+      custom_id: `reading_edit_modal:${slug}`,
+      title: `編輯閱讀：${(entry.title || '未命名').slice(0, 40)}`,
+      components: [
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'title',
+            label: '作品名',
+            style: 1,
+            required: true,
+            max_length: 200,
+            ...withValue(entry.title),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'status',
+            label: '狀態',
+            style: 1,
+            required: false,
+            max_length: 20,
+            placeholder: 'completed / ongoing / dropped',
+            ...withValue(entry.read_status),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'score',
+            label: '評分（選填）',
+            style: 1,
+            required: false,
+            max_length: 10,
+            placeholder: '0-10，可用小數',
+            ...withValue(entry.score != null ? String(entry.score) : undefined),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'read_at',
+            label: '閱讀日期（選填）',
+            style: 1,
+            required: false,
+            max_length: 10,
+            placeholder: 'YYYY-MM-DD',
+            ...withValue(entry.read_at),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'tags',
+            label: '標籤（選填）',
+            style: 1,
+            required: false,
+            max_length: 200,
+            placeholder: 'topic:reading relationship:older-seme',
+            ...withValue(tags),
+          }],
+        },
+      ],
+    },
+  };
+}
+
+function readingActionMessage(entry: any) {
+  const score = entry.score != null ? entry.score.toFixed(1) : '—';
+  const tags = parseStoredReadingTags(entry.tags);
+  const lockMode = detectReadingLockMode(tags);
+  return {
+    type: 4,
+    data: {
+      content: [
+        `📘 已選擇「${entry.title}」`,
+        `狀態：${entry.read_status}｜評分：${score}｜日期：${entry.read_at || '—'}`,
+        `上鎖：${labelReadingLockMode(lockMode)}`,
+        `標籤：${tags.length > 0 ? tags.map((tag) => normalizeTagInput(tag).label).join('、') : '—'}`,
+      ].join('\n'),
+      flags: 64,
+      components: [
+        {
+          type: 1,
+          components: [
+            { type: 2, style: 1, label: '✏️ 編輯', custom_id: `reading_edit:${entry.slug}` },
+            { type: 2, style: 2, label: '📝 心得', custom_id: `reading_review_open:${entry.slug}` },
+            { type: 2, style: 4, label: '🗑️ 刪除', custom_id: `reading_delete_confirm:${entry.slug}` },
+          ],
+        },
+        {
+          type: 1,
+          components: [
+            {
+              type: 3,
+              custom_id: `reading_lock_mode:${entry.slug}`,
+              placeholder: `上鎖模式：${labelReadingLockMode(lockMode)}`,
+              min_values: 1,
+              max_values: 1,
+              options: [
+                { label: '不上鎖', value: 'none', default: lockMode === 'none' },
+                { label: '18+', value: '18plus', default: lockMode === '18plus' },
+                { label: '爭議題材', value: 'controversial', default: lockMode === 'controversial' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+function readingDeleteConfirmMessage(slug: string, title: string) {
+  return {
+    type: 7,
+    data: {
+      content: `⚠️ 確定要刪除閱讀記錄「**${title}**」嗎？這個操作無法復原。`,
+      embeds: [],
+      components: [
+        {
+          type: 1,
+          components: [
+            { type: 2, style: 4, label: '🗑️ 確定刪除', custom_id: `reading_do_delete:${slug}` },
+            { type: 2, style: 2, label: '取消', custom_id: 'cancel' },
           ],
         },
       ],
@@ -223,6 +422,53 @@ export async function handleComponent(db: any, customId: string, values?: string
     return bulkActionButtons(selectedIds, filters);
   }
 
+  if (customId === 'reading_select') {
+    const slug = values?.[0];
+    if (!slug) {
+      return { type: 4, data: { content: '❌ 請先選一筆閱讀記錄', flags: 64 } };
+    }
+    const entry = await getReadingEntryBySlug(db, slug);
+    if (!entry) {
+      return { type: 4, data: { content: '❌ 找不到這筆閱讀記錄', flags: 64 } };
+    }
+    return readingActionMessage(entry);
+  }
+
+  if (customId.startsWith('reading_lock_mode:')) {
+    const slug = customId.slice('reading_lock_mode:'.length);
+    const lockMode = values?.[0];
+    if (!slug || !lockMode || !['none', '18plus', 'controversial'].includes(lockMode)) {
+      return { type: 4, data: { content: '❌ 無效的上鎖模式', flags: 64 } };
+    }
+
+    const entry = await getReadingEntryBySlug(db, slug);
+    if (!entry) {
+      return { type: 4, data: { content: '❌ 找不到這筆閱讀記錄', flags: 64 } };
+    }
+
+    const currentTags = parseStoredReadingTags(entry.tags);
+    const nextTags = replaceReadingLockTags(
+      currentTags,
+      lockMode as 'none' | '18plus' | 'controversial'
+    );
+
+    await db
+      .prepare(
+        `UPDATE reading_entries
+         SET tags = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .bind(JSON.stringify(nextTags), entry.id)
+      .run();
+
+    const refreshed = await getReadingEntryBySlug(db, slug);
+    if (!refreshed) {
+      return { type: 4, data: { content: '❌ 更新後找不到這筆閱讀記錄', flags: 64 } };
+    }
+
+    return readingActionMessage(refreshed);
+  }
+
   const colonIdx = customId.indexOf(':');
   const action = colonIdx >= 0 ? customId.slice(0, colonIdx) : customId;
   const payload = colonIdx >= 0 ? customId.slice(colonIdx + 1) : '';
@@ -276,6 +522,111 @@ export async function handleComponent(db: any, customId: string, values?: string
     }
   }
 
+  if (action === 'reading_edit' || action === 'reading_review_open' || action === 'reading_delete_confirm' || action === 'reading_do_delete') {
+    const slug = payload;
+    if (!slug) {
+      return { type: 4, data: { content: '❌ 無效的閱讀操作', flags: 64 } };
+    }
+
+    const entry = await getReadingEntryBySlug(db, slug);
+    if (!entry) {
+      return { type: 7, data: { content: '❌ 找不到此閱讀記錄（可能已被刪除）', embeds: [], components: [] } };
+    }
+
+    if (action === 'reading_edit') {
+      return readingEditModal(slug, entry);
+    }
+
+    if (action === 'reading_review_open') {
+      return {
+        type: 9,
+        data: {
+          custom_id: `reading_review_modal:${slug}`,
+          title: `補心得：${(entry.title || '未命名').slice(0, 40)}`,
+          components: [
+            {
+              type: 1,
+              components: [{
+                type: 4,
+                custom_id: 'score',
+                label: '評分（選填）',
+                style: 1,
+                required: false,
+                max_length: 10,
+                placeholder: '0-10，可用小數',
+                ...(entry.score != null ? { value: String(entry.score) } : {}),
+              }],
+            },
+            {
+              type: 1,
+              components: [{
+                type: 4,
+                custom_id: 'read_at',
+                label: '閱讀日期（選填）',
+                style: 1,
+                required: false,
+                max_length: 10,
+                placeholder: 'YYYY-MM-DD',
+                ...(entry.read_at ? { value: entry.read_at } : {}),
+              }],
+            },
+            {
+              type: 1,
+              components: [{
+                type: 4,
+                custom_id: 'short_review',
+                label: '短評（選填）',
+                style: 1,
+                required: false,
+                max_length: 280,
+                placeholder: '一句話記下你的感受',
+                ...(entry.short_review ? { value: entry.short_review } : {}),
+              }],
+            },
+            {
+              type: 1,
+              components: [{
+                type: 4,
+                custom_id: 'blurb',
+                label: '文案 / 簡介（選填）',
+                style: 2,
+                required: false,
+                max_length: 4000,
+                placeholder: '貼作品簡介或文案',
+                ...(entry.blurb ? { value: entry.blurb } : {}),
+              }],
+            },
+            {
+              type: 1,
+              components: [{
+                type: 4,
+                custom_id: 'detail_review',
+                label: '詳細心得（選填）',
+                style: 2,
+                required: false,
+                max_length: 4000,
+                placeholder: '完整心得之後慢慢補也可以',
+                ...(entry.detail_review ? { value: entry.detail_review } : {}),
+              }],
+            },
+          ],
+        },
+      };
+    }
+
+    if (action === 'reading_delete_confirm') {
+      return readingDeleteConfirmMessage(slug, entry.title || '（未命名）');
+    }
+
+    if (action === 'reading_do_delete') {
+      await deleteReadingEntry(db, entry.id);
+      return {
+        type: 7,
+        data: { content: `🗑️ 已刪除閱讀記錄「**${entry.title || '（未命名）'}**」`, embeds: [], components: [] },
+      };
+    }
+  }
+
   // Single-entry actions
   const entryId = payload;
   if (!entryId) {
@@ -293,8 +644,10 @@ export async function handleComponent(db: any, customId: string, values?: string
   const title = (entry as any).title || '（無標題）';
 
   switch (action) {
-    case 'edit':
-      return editModal(entryId, entry);
+    case 'edit': {
+      const currentTags = await getTagsByEntryId(db, entryId);
+      return editModal(entryId, entry, currentTags);
+    }
 
     case 'archive_confirm':
       return archiveConfirmMessage(entryId, title);

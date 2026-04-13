@@ -5,14 +5,13 @@ import { getEntriesByCategory } from '../../lib/data'
 import { buildEntryCardModels, CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from '../../lib/presenters'
 import { applyPageCacheHeaders } from '../../lib/response'
 
-export async function getStaticPaths() {
-  const categories = ['journal', 'reading', 'travel', 'place']
-  return categories.map((category) => ({
-    params: { category },
-  }))
-}
+const VALID_CATEGORIES = new Set(['journal', 'reading', 'travel', 'place'])
 
 const { category } = Astro.params
+if (!category || !VALID_CATEGORIES.has(category)) {
+  return Astro.redirect('/articles')
+}
+
 const label = CATEGORY_LABELS[category || ''] || category || ''
 const description = CATEGORY_DESCRIPTIONS[category || ''] || ''
 

@@ -3,11 +3,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro'
 import ReadingProgress from '../../components/ReadingProgress.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
 import { formatDate } from '@personal-blog/shared'
-import 'katex/dist/katex.min.css'
+import katexStylesheetUrl from 'katex/dist/katex.min.css?url'
 import type { Asset } from '@personal-blog/shared'
-import { renderMarkdownToHtml, stripFirstH1 } from '../../lib/markdown'
-import { getEntryBySlug, getAssetsByEntryId, getArticles } from '../../lib/data'
+import { containsMathSyntax, renderMarkdownToHtml, stripFirstH1 } from '../../lib/markdown'
+import { getEntryBySlug, getAssetsByEntryId, getEntryTagSlugs, getEntrySiblings } from '../../lib/data'
 import { applyPageCacheHeaders } from '../../lib/response'
+import {
+  CONTENT_LOCK_COOKIE,
+  getContentLockPassword,
+  hasLockedTags,
+  hasUnlockedCookie,
+} from '../../lib/access'
 
 
 const slug = Astro.params.slug
@@ -21,30 +27,69 @@ if (!entry) {
 
 const displayTitle = entry.title?.replace(/^#+\s+/, '').trim() || formatDate(entry.created_at)
 const cleanedMarkdown = stripFirstH1(entry.content_markdown || '')
-const renderedContent = await renderMarkdownToHtml(cleanedMarkdown)
+const usesKatex = containsMathSyntax(cleanedMarkdown)
+const entryTags = await getEntryTagSlugs(entry.id)
+const requiresLock = hasLockedTags(entryTags)
+const lockPassword = getContentLockPassword()
+const unlocked = requiresLock
+  ? hasUnlockedCookie(Astro.cookies.get(CONTENT_LOCK_COOKIE)?.value)
+  : true
+
+let lockError = ''
+if (requiresLock && lockPassword && Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData()
+  const submittedPassword = String(formData.get('password') || '').trim()
+  if (submittedPassword && submittedPassword === lockPassword) {
+    Astro.cookies.set(CONTENT_LOCK_COOKIE, submittedPassword, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      secure: true,
+      maxAge: 60 * 60 * 8,
+    })
+    return Astro.redirect(Astro.url.pathname)
+  }
+  lockError = '密碼不正確。'
+}
+
+const renderedContent = requiresLock && lockPassword && !unlocked
+  ? ''
+  : await renderMarkdownToHtml(cleanedMarkdown)
 
 // Fetch assets (cover image, etc.)
 const assets = await getAssetsByEntryId(entry.id)
 const coverAsset = assets.find((asset) => asset.kind === 'cover')
 const imageAssets = assets.filter((asset) => asset.kind === 'image')
 const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://personal-blog-api.personal-blog.workers.dev'
-const allArticles = await getArticles()
-const sortedArticles = [...allArticles].sort((a, b) =>
-  new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime()
-)
-const articleIndex = sortedArticles.findIndex((article) => article.id === entry.id)
-const newerArticle = articleIndex > 0 ? sortedArticles[articleIndex - 1] : null
-const olderArticle = articleIndex >= 0 && articleIndex < sortedArticles.length - 1
-  ? sortedArticles[articleIndex + 1]
-  : null
+const { newer: newerArticle, older: olderArticle } = await getEntrySiblings(entry.id)
 
 // 應用快取策略：10分鐘 CDN 快取 + 1小時過期後仍可用
 applyPageCacheHeaders(Astro.response, 'detail')
 ---
 
-<BaseLayout title={`${displayTitle} | Double River`}>
+<BaseLayout
+  title={`${displayTitle} | Double River`}
+  serifFont={true}
+  stylesheets={usesKatex ? [katexStylesheetUrl] : []}
+>
   <ReadingProgress />
   <ReaderControls client:load />
+  {requiresLock && lockPassword && !unlocked ? (
+    <div class="content-lock-shell">
+      <div class="content-lock-card">
+        <p class="content-lock-kicker">protected content</p>
+        <h1>這篇文章已上鎖</h1>
+        <p class="content-lock-desc">這篇文章帶有需要保護的 tag。輸入密碼後才會顯示完整內容。</p>
+        <form method="POST" class="content-lock-form">
+          <label class="content-lock-label" for="lockPassword">密碼</label>
+          <input id="lockPassword" name="password" type="password" required />
+          {lockError && <p class="content-lock-error">{lockError}</p>}
+          <button type="submit">解鎖文章內容</button>
+        </form>
+        <a href="/articles" class="content-lock-back">← 回到文章列表</a>
+      </div>
+    </div>
+  ) : (
   <article class="article">
     <header class="article-header">
       <div class="article-meta">
@@ -107,6 +152,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
       </nav>
     </footer>
   </article>
+  )}
 </BaseLayout>
 
 <script is:inline>
@@ -148,6 +194,81 @@ applyPageCacheHeaders(Astro.response, 'detail')
 </script>
 
 <style is:global>
+  .content-lock-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 4rem;
+  }
+
+  .content-lock-card {
+    padding: 1.5rem;
+    border: 1px solid #e0daf5;
+    border-radius: 18px;
+    background: #fff;
+  }
+
+  .content-lock-kicker {
+    margin: 0 0 0.4rem;
+    color: #9892ae;
+    font-size: 0.76rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .content-lock-card h1 {
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.8rem, 5vw, 2.4rem);
+  }
+
+  .content-lock-desc {
+    margin: 0 0 1rem;
+    color: #625c78;
+    line-height: 1.7;
+  }
+
+  .content-lock-form {
+    display: grid;
+    gap: 0.65rem;
+    max-width: 20rem;
+  }
+
+  .content-lock-label {
+    font-size: 0.85rem;
+    color: #6b6482;
+  }
+
+  .content-lock-form input {
+    padding: 0.8rem 0.9rem;
+    border: 1px solid #d8d2ec;
+    border-radius: 12px;
+    font: inherit;
+  }
+
+  .content-lock-form button {
+    border: none;
+    border-radius: 999px;
+    background: #5a6aba;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    padding: 0.78rem 1.1rem;
+    cursor: pointer;
+  }
+
+  .content-lock-error {
+    margin: 0;
+    color: #b34747;
+    font-size: 0.9rem;
+  }
+
+  .content-lock-back {
+    display: inline-block;
+    margin-top: 1rem;
+    color: #5a6aba;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
   article.article {
     max-width: 760px;
     margin: 0 auto;

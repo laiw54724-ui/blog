@@ -9,6 +9,9 @@ fnm use 22.12.0
 
 # 在 monorepo 根目錄安裝依賴
 npm install
+
+# 確認目前 shell 真的吃到正確版本
+npm run check:node
 ```
 
 ---
@@ -16,8 +19,7 @@ npm install
 ## 部署 API（Cloudflare Worker）
 
 ```bash
-cd apps/api
-npx wrangler deploy
+npm run deploy:api
 ```
 
 - URL：`https://personal-blog-api.personal-blog.workers.dev`
@@ -38,8 +40,7 @@ echo "your_key" | npx wrangler secret put DISCORD_PUBLIC_KEY
 ## 部署 Web（Cloudflare Worker with SSR）
 
 ```bash
-cd apps/web
-npm run deploy
+npm run deploy:web
 ```
 
 - URL：`https://personal-blog-web.personal-blog.workers.dev`
@@ -57,12 +58,10 @@ eval "$(fnm env --shell zsh)"
 fnm use 22.12.0
 
 # API
-cd /Users/wen/Documents/dev/blog/apps/api
-npx wrangler deploy
+npm run deploy:api
 
 # Web
-cd /Users/wen/Documents/dev/blog/apps/web
-npm run deploy
+npm run deploy:web
 ```
 
 ---
@@ -81,8 +80,7 @@ npx wrangler d1 execute personal-blog --remote --file=../../db/migrate-v2.sql
 ## Discord 指令註冊（新增/修改指令後才需要）
 
 ```bash
-cd apps/api
-npx tsx src/scripts/register-commands.ts
+npm run register-commands --workspace=apps/api
 ```
 
 ---
@@ -91,5 +89,6 @@ npx tsx src/scripts/register-commands.ts
 
 ```bash
 # 在 monorepo 根目錄
-npx vitest run
+npm run check:node
+fnm exec --using 22.12.0 npm test
 ```

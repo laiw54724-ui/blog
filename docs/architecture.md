@@ -17,12 +17,13 @@
 flowchart TD
   A["Discord Slash Commands"] --> B["Cloudflare Worker API"]
   A2["Discord Attachments"] --> B
-  B --> C["D1 (entries / tags / comments / metrics / profile)"]
+  B --> C["D1 (entries / reading_entries / tags / comments / metrics / profile)"]
   B --> D["R2 (images / profile assets)"]
   C --> E["Astro Web"]
   D --> E
   E --> F["/stream"]
   E --> G["/articles"]
+  E --> G2["/reading"]
   E --> H["/search"]
   E --> I["/c/[category]"]
   E --> J["/tags/[slug]"]
@@ -59,6 +60,22 @@ flowchart TD
 - `excerpt`
 - `cover_asset_id`
 
+### 閱讀主體 `reading_entries`
+
+目前閱讀清單與心得另用一張表承接，欄位重點是：
+
+- `title`
+- `author`
+- `genre`
+- `medium`
+- `read_status`
+- `score`
+- `read_at`
+- `short_review`
+- `detail_review`
+- `tags`（目前為 JSON 字串）
+- `has_detail`
+
 ### 補充資料
 
 - `tags`
@@ -72,21 +89,22 @@ flowchart TD
 
 ### 1. Discord 建立內容
 
-- `/貼文`
+- `/動態`
 - `/文章`
-- `/旅記`
-- `/書摘`
+- `/讀了`
+- `/補心得`
+- `/書單`
 
 建立後會：
 
-- 寫入 `entries`
-- 自動產生 slug
-- 從內容抽 `#hashtag`
-- 建立 `tags` / `entry_tags`
+- `post / article / travel` 流程寫入 `entries`
+- `reading` 流程寫入 `reading_entries`
+- 支援從 tags 判定 locked content
+- 閱讀管理可直接在 Discord 中編輯 / 刪除 / 切換上鎖模式
 
 ### 2. Discord 補圖片
 
-- `/附圖`
+- `/補圖`
 
 建立後會：
 
@@ -100,10 +118,18 @@ flowchart TD
 
 - stream
 - articles
+- reading
 - category archive
 - tag archive
 - search
-- post / article detail
+- post / article / reading detail
+
+### 4. 內容保護
+
+- 目前以 locked tag 為核心規則
+- `LOCKED_TAG_SLUGS` 定義哪些 tag 需要上鎖
+- `CONTENT_LOCK_PASSWORD` 提供簡單密碼閘門
+- `reading` 與 `article` 詳頁已可先顯示密碼表單，再解鎖完整內容
 
 ## 現在的技術判斷
 
@@ -128,6 +154,8 @@ flowchart TD
 - search 已可用
 - entries / assets / metrics 已有批次 API，便於列表頁擴充
 - profile 已有獨立資料來源
+- `reviews` 系列已可帶入有完整心得的 reading entries
+- environment baseline 已用 `.nvmrc` / `check:node` / CI 對齊
 
 ## 下一階段規劃
 

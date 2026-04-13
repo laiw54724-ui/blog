@@ -4,6 +4,8 @@ interface Props {
   description?: string
   ogImage?: string
   canonicalUrl?: string
+  serifFont?: boolean
+  stylesheets?: string[]
 }
 
 const {
@@ -11,6 +13,8 @@ const {
   description = '貼文留下當下，文章留下價值。',
   ogImage = '/og-default.png',
   canonicalUrl = Astro.url.href,
+  serifFont = false,
+  stylesheets = [],
 } = Astro.props
 ---
 
@@ -24,13 +28,20 @@ const {
     <link rel="canonical" href={canonicalUrl} />
     <link rel="alternate" type="application/rss+xml" title="Double River RSS" href="/rss.xml" />
 
-    <!-- Preconnect for fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
+    {serifFont && (
+      <>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700&display=swap"
+          rel="stylesheet"
+        />
+      </>
+    )}
+
+    {stylesheets.map((href) => (
+      <link rel="stylesheet" href={href} />
+    ))}
 
     <!-- OG / social -->
     <meta property="og:title" content={title} />
@@ -50,28 +61,19 @@ const {
         box-sizing: border-box;
       }
       :root {
-        --accent: #5b74c8;
-        --accent-hover: #4a62b0;
-        --accent-bg: #eef1fb;
-        --border: #dddaf0;
-        --bg: #f5f4fb;
+        --accent: #4f55c8;
+        --accent-hover: #3f45b2;
+        --accent-bg: #f4f2ff;
+        --border: #dcd8f4;
+        --bg: #fcfbf8;
         --surface: #fff;
-        --text: #26253a;
-        --text-muted: #8a88a8;
+        --text: #20202a;
+        --text-muted: #8f8bad;
         --serif: 'Noto Serif TC', Georgia, 'Times New Roman', serif;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --accent: #7b93e0;
-          --accent-hover: #8fa5e8;
-          --accent-bg: #1e2340;
-          --border: #2e2c45;
-          --bg: #18172a;
-          --surface: #211f35;
-          --text: #e8e6f5;
-          --text-muted: #7a7898;
-        }
+        --reading-accent: #a85f43;
+        --reading-accent-soft: #f6ece6;
+        --reading-card: #fffaf6;
+        --reading-line: #e8ddd4;
       }
 
       body {
@@ -117,6 +119,7 @@ const {
         <a href="/about">關於</a>
         <a href="/stream">貼文</a>
         <a href="/articles">文章</a>
+        <a href="/reading">閱讀</a>
         <a href="/search">搜尋</a>
       </div>
       <button class="menu-toggle" id="menuToggle" aria-label="開啟選單">
@@ -133,6 +136,7 @@ const {
         <a href="/about">關於</a>
         <a href="/stream">貼文</a>
         <a href="/articles">文章</a>
+        <a href="/reading">閱讀</a>
         <a href="/search">搜尋</a>
       </nav>
     </aside>
@@ -498,7 +502,7 @@ const {
 
       /* ===== 主內容 ===== */
       .main-content {
-        max-width: 820px;
+        max-width: 1000px;
         margin: 0 auto;
         padding: 2rem 1.5rem;
         min-height: 70vh;

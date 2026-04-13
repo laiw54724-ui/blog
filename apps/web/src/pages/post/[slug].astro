@@ -3,9 +3,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro'
 import ReadingProgress from '../../components/ReadingProgress.astro'
 import ReaderControls from '../../components/ReaderControls.astro'
 import CommentBoard from '../../components/CommentBoard.astro'
-import 'katex/dist/katex.min.css'
+import katexStylesheetUrl from 'katex/dist/katex.min.css?url'
 import { formatDate } from '@personal-blog/shared'
-import { renderMarkdownToHtml, stripFirstH1, extractH1Title } from '../../lib/markdown'
+import { containsMathSyntax, renderMarkdownToHtml, stripFirstH1, extractH1Title } from '../../lib/markdown'
 import { getEntryBySlug, getAssetsByEntryId, getEntryMetrics, getEntryComments } from '../../lib/data'
 import { applyPageCacheHeaders } from '../../lib/response'
 
@@ -22,6 +22,7 @@ const titleFromEntry = entry.title?.replace(/^#+\s+/, '').trim()
 const titleFromContent = titleFromEntry ? null : extractH1Title(entry.content_markdown || '')
 const displayTitle = titleFromEntry || titleFromContent || formatDate(entry.created_at)
 const cleanedMarkdown = titleFromEntry || titleFromContent ? stripFirstH1(entry.content_markdown || '') : entry.content_markdown || ''
+const usesKatex = containsMathSyntax(cleanedMarkdown)
 const renderedContent = await renderMarkdownToHtml(cleanedMarkdown)
 
 const assets = await getAssetsByEntryId(entry.id)
@@ -55,7 +56,7 @@ const getGalleryAspectClass = (asset: (typeof allImages)[number]) => {
 applyPageCacheHeaders(Astro.response, 'detail')
 ---
 
-<BaseLayout title={`${displayTitle} | Double River`}>
+<BaseLayout title={`${displayTitle} | Double River`} stylesheets={usesKatex ? [katexStylesheetUrl] : []}>
   <ReadingProgress />
   <ReaderControls client:load />
   <article class="post">
@@ -631,7 +632,12 @@ applyPageCacheHeaders(Astro.response, 'detail')
     grid-template-columns: 1fr;
   }
   .image-gallery[data-count="1"] .gallery-item {
-    aspect-ratio: 16 / 9;
+    /* natural ratio — no forced aspect-ratio */
+  }
+
+  .image-gallery[data-count="1"] .gallery-item img {
+    height: auto;
+    object-fit: unset;
   }
 
   /* 2 images: side by side */
@@ -760,7 +766,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
     display: flex;
     align-items: center;
     gap: 0.7rem;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.4rem;
     padding-left: 0.1rem;
   }
 
@@ -821,8 +827,8 @@ applyPageCacheHeaders(Astro.response, 'detail')
   /* ── Comments section ── */
   .post-comments {
     max-width: 680px;
-    margin: 0.5rem auto 2rem;
-    padding: 1rem 0 0;
+    margin: 0 auto 2rem;
+    padding: 0.5rem 0 0;
     border-top: 1px solid var(--border, #dddaf0);
   }
 

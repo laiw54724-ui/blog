@@ -29,6 +29,18 @@
 - 文章索引列表（全部文章）
 - 右欄：熱門標籤（structured / free 分流）
 
+### `/reading`
+
+- 閱讀清單列表
+- 目前支援 genre / medium / read_status / score / read_at 等資料展示
+- 前端可依狀態與條件過濾
+
+### `/reading/[slug]`
+
+- 閱讀詳頁
+- 顯示短評 / 文案 / 詳細心得 / tags / 外部連結
+- 命中 locked tag 時先顯示密碼表單
+
 ### `/search`
 
 - 支援 `?q=` 全文搜尋（title / content_markdown / excerpt）
@@ -39,6 +51,9 @@
 ### `/c/[category]`
 
 支援分類：`journal` / `reading` / `travel` / `place`
+
+- 目前為 server-rendered route
+- 非法 category redirect 到 `/articles`
 
 ### `/tags`
 
@@ -58,7 +73,9 @@
 
 - 頁內 tag 快速過濾
 - 三段 fallback：tag slugs → fallback category → 全部文章
+- `reviews` 系列可帶入 `has_detail = 1` 的閱讀條目
 - 非法 slug redirect 到 `/articles`（不 500）
+- 目前為 server-rendered route，不使用 prerender `getStaticPaths()`
 
 ### `/post/[slug]`
 
@@ -78,6 +95,7 @@
 - Reader controls（字型大小）
 - 上一篇 / 下一篇導覽
 - 封面圖 + 附圖 gallery
+- 命中 locked tag 時先顯示密碼表單
 
 ### `/rss.xml`
 
@@ -120,6 +138,7 @@
 - `GET /api/entries/slug/:slug`
 - `GET /api/entries/:id`
 - `GET /api/entries/:id/assets`
+- `GET /api/entries/:id/tags`
 - `GET /api/entries/:id/metrics`
 - `PUT /api/entries/:id`
 - `DELETE /api/entries/:id`（軟刪除）
@@ -143,6 +162,13 @@
 
 - `GET /api/tags`（`?type=` / `limit`）
 - `GET /api/tags/:slug/entries`（`?type=` / `category` / `limit`）
+
+### Reading
+
+- `GET /api/reading`
+- `GET /api/reading/:slug`
+- `POST /api/reading`
+- `PATCH /api/reading/:id`
 
 ### Assets
 
@@ -186,8 +212,10 @@
 - [stream.astro](../apps/web/src/pages/stream.astro)
 - [articles.astro](../apps/web/src/pages/articles.astro)
 - [search.astro](../apps/web/src/pages/search.astro)
+- [reading.astro](../apps/web/src/pages/reading.astro)
 - [tags.astro](../apps/web/src/pages/tags.astro)
 - [c/[category].astro](../apps/web/src/pages/c/[category].astro)
+- [reading/[slug].astro](../apps/web/src/pages/reading/[slug].astro)
 - [tags/[slug].astro](../apps/web/src/pages/tags/[slug].astro)
 - [series/[slug].astro](../apps/web/src/pages/series/[slug].astro)
 - [post/[slug].astro](../apps/web/src/pages/post/[slug].astro)
@@ -207,6 +235,7 @@
 ## 下一批優先項目
 
 1. `/admin` — 單作者輕後台（需先決定 auth）
-2. Discord 建立流程補欄位（visibility / tags / 是否公開）
-3. 貼文升格文章完整流程
-4. `/map`
+2. `reading` 頁 product 化（URL filter / empty state / 資料載入策略）
+3. locked tag 規則擴充到更多入口
+4. 貼文升格文章完整流程
+5. `/map`

@@ -4,6 +4,7 @@
  */
 
 import type { Entry, ResolvedCoverAsset, EntryMetrics, Asset, CommentThread, TagSummary } from '@personal-blog/shared';
+import { filterUnlockedTagSummaries } from './access';
 
 // API_BASE uses PUBLIC_API_URL environment variable (set at build time)
 const API_BASE =
@@ -117,6 +118,34 @@ export async function getPosts(): Promise<Entry[]> {
   }
 }
 
+export async function getPostsPage(options?: {
+  limit?: number;
+  offset?: number;
+}): Promise<Entry[]> {
+  const limit = options?.limit ?? 10;
+  const offset = options?.offset ?? 0;
+  const cacheKey = `posts:page:${limit}:${offset}`;
+  const cached = getCached<Entry[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const response = await apiFetch(
+      `/api/entries?type=post&visibility=public&limit=${limit}&offset=${offset}`
+    );
+    if (!response.ok) {
+      console.error('Failed to fetch posts page:', response.statusText);
+      return [];
+    }
+    const { data } = await response.json();
+    const result = data || [];
+    setCache(cacheKey, result);
+    return result;
+  } catch (error) {
+    console.error('Error fetching posts page:', error);
+    return [];
+  }
+}
+
 /**
  * Get all articles (文章) - visible publicly
  */
@@ -162,6 +191,58 @@ export async function getEntryBySlug(slug: string): Promise<Entry | null> {
   } catch (error) {
     console.error(`Error fetching entry ${slug}:`, error);
     return null;
+  }
+}
+
+export async function getEntryTagSlugs(entryId: string): Promise<string[]> {
+  if (!entryId) return [];
+
+  const cacheKey = `entry:tags:${entryId}`;
+  const cached = getCached<string[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const response = await apiFetch(`/api/entries/${encodeURIComponent(entryId)}/tags`);
+    if (!response.ok) {
+      console.error(`Failed to fetch tags for entry ${entryId}:`, response.statusText);
+      return [];
+    }
+    const { data } = await response.json();
+    const result = Array.isArray(data) ? data : [];
+    setCache(cacheKey, result);
+    return result;
+  } catch (error) {
+    console.error(`Error fetching tags for entry ${entryId}:`, error);
+    return [];
+  }
+}
+
+export async function getEntrySiblings(entryId: string): Promise<{
+  newer: Entry | null;
+  older: Entry | null;
+}> {
+  if (!entryId) return { newer: null, older: null };
+
+  const cacheKey = `entry:siblings:${entryId}`;
+  const cached = getCached<{ newer: Entry | null; older: Entry | null }>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const response = await apiFetch(`/api/entries/${encodeURIComponent(entryId)}/siblings`);
+    if (!response.ok) {
+      console.error(`Failed to fetch siblings for entry ${entryId}:`, response.statusText);
+      return { newer: null, older: null };
+    }
+    const { data } = await response.json();
+    const result = {
+      newer: data?.newer ?? null,
+      older: data?.older ?? null,
+    };
+    setCache(cacheKey, result);
+    return result;
+  } catch (error) {
+    console.error(`Error fetching siblings for entry ${entryId}:`, error);
+    return { newer: null, older: null };
   }
 }
 
@@ -304,8 +385,10 @@ export async function getPopularTags(options?: {
       return [];
     }
     const { data } = await response.json();
-    setCache(cacheKey, data || []);
-    return data || [];
+    const tagSummaries = Array.isArray(data) ? (data as TagSummary[]) : [];
+    const filtered = filterUnlockedTagSummaries(tagSummaries);
+    setCache(cacheKey, filtered);
+    return filtered;
   } catch (error) {
     console.error('Error fetching tags:', error);
     return [];
@@ -561,3 +644,117 @@ export async function getProfile(): Promise<UserProfile> {
 }
 
 export { clearCache };
+
+// ── Reading entries ───────────────────────────────────────────────────────────
+
+export interface ReadingEntryRow {
+  id: string;
+  slug: string;
+  title: string;
+  author?: string | null;
+  alt_title?: string | null;
+  genre: string;
+  medium: string;
+  read_status: string;
+  work_status: string;
+  score?: number | null;
+  read_at?: string | null;
+  short_review?: string | null;
+  detail_review?: string | null;
+  blurb?: string | null;
+  tags: string;   // JSON string
+  links: string;  // JSON string
+  has_detail: number;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReadingEntriesResponse {
+  data: ReadingEntryRow[];
+  count: number;
+  total: number;
+  limit: number;
+  offset: number;
+  ok: boolean;
+  error?: string;
+}
+
+/** List all reading entries (sorted by read_at desc by default) */
+export async function getReadingEntries(options?: {
+  q?: string;
+  genre?: string;
+  medium?: string;
+  read_status?: string;
+  sort?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<ReadingEntryRow[]> {
+  const response = await getReadingEntriesPage(options);
+  return response.data;
+}
+
+export async function getReadingEntriesPage(options?: {
+  q?: string;
+  genre?: string;
+  medium?: string;
+  read_status?: string;
+  sort?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<ReadingEntriesResponse> {
+  const params = new URLSearchParams();
+  if (options?.q) params.set('q', options.q);
+  if (options?.genre) params.set('genre', options.genre);
+  if (options?.medium) params.set('medium', options.medium);
+  if (options?.read_status) params.set('read_status', options.read_status);
+  if (options?.sort) params.set('sort', options.sort);
+  params.set('limit', String(options?.limit ?? 500));
+  params.set('offset', String(options?.offset ?? 0));
+
+  try {
+    const response = await apiFetch(`/api/reading?${params.toString()}`);
+    if (!response.ok) {
+      return {
+        data: [],
+        count: 0,
+        total: 0,
+        limit: options?.limit ?? 500,
+        offset: options?.offset ?? 0,
+        ok: false,
+        error: '讀取閱讀清單時發生問題。',
+      };
+    }
+    const json = await response.json();
+    return {
+      data: json.data ?? [],
+      count: json.count ?? 0,
+      total: json.total ?? json.count ?? 0,
+      limit: json.limit ?? options?.limit ?? 500,
+      offset: json.offset ?? options?.offset ?? 0,
+      ok: true,
+    };
+  } catch {
+    return {
+      data: [],
+      count: 0,
+      total: 0,
+      limit: options?.limit ?? 500,
+      offset: options?.offset ?? 0,
+      ok: false,
+      error: '目前暫時無法連到閱讀資料，請稍後再試。',
+    };
+  }
+}
+
+/** Get a single reading entry by slug */
+export async function getReadingEntryBySlug(slug: string): Promise<ReadingEntryRow | null> {
+  try {
+    const response = await apiFetch(`/api/reading/${encodeURIComponent(slug)}`);
+    if (!response.ok) return null;
+    const { data } = await response.json();
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}

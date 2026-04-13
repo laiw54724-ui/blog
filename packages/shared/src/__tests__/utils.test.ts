@@ -213,9 +213,14 @@ describe('STRUCTURED_TAG_GROUP_ORDER', () => {
   it('keeps a stable display order for official groups', () => {
     expect(STRUCTURED_TAG_GROUP_ORDER).toEqual([
       'genre',
+      'medium',
+      'era',
       'tone',
       'setting',
+      'scene',
       'relationship',
+      'warning',
+      'recommend',
       'topic',
     ]);
   });

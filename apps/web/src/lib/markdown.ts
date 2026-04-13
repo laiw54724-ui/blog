@@ -79,6 +79,18 @@ export async function renderMarkdownToHtml(markdown: string): Promise<string> {
   }
 }
 
+export function containsMathSyntax(markdown: string): boolean {
+  if (!markdown || typeof markdown !== 'string') return false;
+
+  return (
+    /\$\$[\s\S]+?\$\$/.test(markdown) ||
+    /(^|[^\\])\$(?!\s)[^$\n]+?(?<!\\)\$/.test(markdown) ||
+    /\\\(([\s\S]+?)\\\)/.test(markdown) ||
+    /\\\[([\s\S]+?)\\\]/.test(markdown) ||
+    /\\begin\{[a-z*]+\}/.test(markdown)
+  );
+}
+
 /**
  * Escape HTML special characters
  * Fallback when markdown rendering fails

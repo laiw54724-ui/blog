@@ -6,6 +6,7 @@ import entriesRouter from './routes/entries';
 import commentsRouter from './routes/comments';
 import profileRouter from './routes/profile';
 import tagsRouter from './routes/tags';
+import readingRouter from './routes/reading';
 
 interface StoredObject {
   body: BodyInit | null;
@@ -40,6 +41,7 @@ app.route('/api/entries', entriesRouter);
 app.route('/api/entries/:id/comments', commentsRouter);
 app.route('/api/profile', profileRouter);
 app.route('/api/tags', tagsRouter);
+app.route('/api/reading', readingRouter);
 
 // Serve assets from R2
 app.get('/api/assets/*', async (c: Context<{ Bindings: AppEnv }>) => {

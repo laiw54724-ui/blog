@@ -25,6 +25,10 @@
     "./utils": {
       "types": "./src/utils.ts",
       "import": "./src/utils.ts"
+    },
+    "./reading-db": {
+      "types": "./src/reading-db.ts",
+      "import": "./src/reading-db.ts"
     }
   },
   "scripts": {

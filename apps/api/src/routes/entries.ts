@@ -7,6 +7,8 @@ import {
   getEntryById,
   getPublicEntryById,
   getPublicEntryBySlug,
+  getAdjacentPublicArticles,
+  getTagsByEntryId,
   updateEntry,
   archiveEntry,
   deleteEntry,
@@ -25,6 +27,12 @@ interface EntryMetricRow {
   clap_count: number;
   comment_count: number;
   last_viewed_at: string | null;
+}
+
+interface PublicEntryPreviewRow {
+  id: string;
+  created_at: string;
+  published_at: string | null;
 }
 
 const router = new Hono<{ Bindings: Env }>();
@@ -176,6 +184,31 @@ router.get('/slug/:slug', async (c) => {
   }
 });
 
+// GET /api/entries/:id/siblings - Get previous / next public articles
+router.get('/:id/siblings', async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+
+  try {
+    const entry = (await getPublicEntryById(db, id)) as PublicEntryPreviewRow | null;
+    if (!entry) {
+      return c.json({ error: 'Entry not found' }, 404);
+    }
+
+    const siblings = await getAdjacentPublicArticles(
+      db,
+      id,
+      entry.published_at ?? null,
+      entry.created_at
+    );
+
+    return c.json({ data: siblings });
+  } catch (error) {
+    console.error('Error fetching entry siblings:', error);
+    return c.json({ error: 'Failed to fetch entry siblings' }, 500);
+  }
+});
+
 // GET /api/entries/:id - Get single entry
 router.get('/:id', async (c) => {
   const db = c.env.DB;
@@ -206,6 +239,25 @@ router.get('/:id/assets', async (c) => {
   } catch (error) {
     console.error('Error fetching assets:', error);
     return c.json({ error: 'Failed to fetch assets' }, 500);
+  }
+});
+
+// GET /api/entries/:id/tags - Get tag slugs for an entry
+router.get('/:id/tags', async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+
+  try {
+    const existing = await getEntryById(db, id);
+    if (!existing) {
+      return c.json({ error: 'Entry not found' }, 404);
+    }
+
+    const tags = await getTagsByEntryId(db, id);
+    return c.json({ data: tags });
+  } catch (error) {
+    console.error('Error fetching entry tags:', error);
+    return c.json({ error: 'Failed to fetch entry tags' }, 500);
   }
 });
 

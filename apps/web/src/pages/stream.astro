@@ -1,16 +1,26 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
 import PostFeedCard from '../components/PostFeedCard.astro'
-import { getPosts, getProfile } from '../lib/data'
+import { getPostsPage, getProfile } from '../lib/data'
 import { buildEntryCardModels } from '../lib/presenters'
 import { applyPageCacheHeaders } from '../lib/response'
 
-const [allPosts, profile] = await Promise.all([
-  getPosts(),
+const searchParams = Astro.url.searchParams
+const page = Math.max(Number.parseInt(searchParams.get('page') || '1', 10) || 1, 1)
+const pageSize = 10
+const offset = (page - 1) * pageSize
+
+const [posts, profile] = await Promise.all([
+  getPostsPage({ limit: pageSize + 1, offset }),
   getProfile(),
 ])
 
-const postModels = await buildEntryCardModels(allPosts, { excerptLength: 100 })
+const hasNextPage = posts.length > pageSize
+const visiblePosts = hasNextPage ? posts.slice(0, pageSize) : posts
+const postModels = await buildEntryCardModels(visiblePosts, { excerptLength: 100 })
+
+const prevPageUrl = page > 1 ? (page === 2 ? '/stream' : `/stream?page=${page - 1}`) : null
+const nextPageUrl = hasNextPage ? `/stream?page=${page + 1}` : null
 
 applyPageCacheHeaders(Astro.response, 'stream')
 ---
@@ -22,11 +32,11 @@ applyPageCacheHeaders(Astro.response, 'stream')
       <p>最近的短記、想法、圖片和小更新。</p>
     </header>
 
-    <div class="posts-list" id="postsList">
+    <div class="posts-list">
       {
         postModels.length > 0 ? (
-          postModels.map((item, i) => (
-            <div class="post-item" data-index={i} hidden={i >= 10 ? true : undefined}>
+          postModels.map((item) => (
+            <div class="post-item">
               <PostFeedCard
                 href={item.href}
                 title={item.displayTitle}
@@ -46,59 +56,25 @@ applyPageCacheHeaders(Astro.response, 'stream')
       }
     </div>
 
-    {postModels.length > 10 && (
-      <div class="load-more-wrap" id="loadMoreWrap">
-        <button class="load-more-btn" id="loadMoreBtn" type="button">
-          載入更多
-          <span class="load-more-count" id="loadMoreCount">
-            （還有 {postModels.length - 10} 則）
-          </span>
-        </button>
-      </div>
+    {(prevPageUrl || nextPageUrl) && (
+      <nav class="stream-pagination" aria-label="貼文分頁">
+        {prevPageUrl ? (
+          <a href={prevPageUrl} class="page-link">← 較新的貼文</a>
+        ) : (
+          <span class="page-link page-link-disabled">← 較新的貼文</span>
+        )}
+
+        <span class="page-status">第 {page} 頁</span>
+
+        {nextPageUrl ? (
+          <a href={nextPageUrl} class="page-link">較舊的貼文 →</a>
+        ) : (
+          <span class="page-link page-link-disabled">較舊的貼文 →</span>
+        )}
+      </nav>
     )}
   </div>
 </BaseLayout>
-
-<script>
-  function initLoadMore() {
-    const btn = document.getElementById('loadMoreBtn');
-    const wrap = document.getElementById('loadMoreWrap');
-    const countEl = document.getElementById('loadMoreCount');
-    if (!btn || !wrap) return;
-
-    const PAGE_SIZE = 10;
-    let shown = document.querySelectorAll('.post-item:not([hidden])').length;
-
-    const updateCount = () => {
-      const total = document.querySelectorAll('.post-item').length;
-      const remaining = total - shown;
-      if (remaining <= 0) {
-        wrap.setAttribute('hidden', '');
-      } else if (countEl) {
-        countEl.textContent = `（還有 ${remaining} 則）`;
-      }
-    };
-
-    if (btn.dataset.bound !== '1') {
-      btn.addEventListener('click', () => {
-        const items = document.querySelectorAll('.post-item[hidden]');
-        let revealed = 0;
-        items.forEach((item) => {
-          if (revealed < PAGE_SIZE) {
-            item.removeAttribute('hidden');
-            revealed++;
-            shown++;
-          }
-        });
-        updateCount();
-      });
-      btn.dataset.bound = '1';
-    }
-  }
-
-  initLoadMore();
-  document.addEventListener('astro:after-swap', initLoadMore);
-</script>
 
 <style>
   .stream-container {
@@ -142,36 +118,37 @@ applyPageCacheHeaders(Astro.response, 'stream')
     display: block;
   }
 
-  .post-item[hidden] {
-    display: none;
-  }
-
-  .load-more-wrap {
+  .stream-pagination {
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
     margin-top: 1.5rem;
   }
 
-  .load-more-btn {
-    padding: 0.7rem 1.6rem;
+  .page-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 8.5rem;
+    padding: 0.7rem 1rem;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--surface);
     color: var(--accent);
     font-size: 0.9rem;
     font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+    text-decoration: none;
   }
 
-  .load-more-btn:hover {
-    background: var(--accent-bg);
-    border-color: var(--accent);
-  }
-
-  .load-more-count {
+  .page-link-disabled {
     color: var(--text-muted);
-    font-weight: 400;
+    opacity: 0.55;
+  }
+
+  .page-status {
+    color: var(--text-muted);
+    font-size: 0.9rem;
   }
 
   @media (max-width: 640px) {
@@ -181,6 +158,15 @@ applyPageCacheHeaders(Astro.response, 'stream')
 
     .stream-header h1 {
       font-size: 1.3rem;
+    }
+
+    .stream-pagination {
+      flex-direction: column;
+    }
+
+    .page-link,
+    .page-link-disabled {
+      width: 100%;
     }
   }
 </style>

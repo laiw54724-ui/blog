@@ -5,7 +5,8 @@
 
 import { getCommandPreset } from '../presets';
 import { createEntryFromCommand } from '../createEntry';
-import { getEntryById, updateEntry } from '@personal-blog/shared/db';
+import { getEntryById, updateEntry, replaceEntryTags } from '@personal-blog/shared/db';
+import { parseManualTags, findOrCreateTag } from '../createEntry';
 
 interface ModalComponent {
   type: number;
@@ -104,6 +105,7 @@ export async function handleEditModal(
   const title = values['title']?.trim() || undefined;
   const content = values['content']?.trim();
   const statusRaw = values['status']?.trim().toLowerCase();
+  const tagsRaw = values['tags']?.trim();
 
   if (!content) {
     return { type: 4, data: { content: '❌ 內容不能為空', flags: 64 } };
@@ -121,18 +123,27 @@ export async function handleEditModal(
     if (title) fields.title = title;
     if (status) {
       fields.status = status;
-      // When publishing, also make it public
       if (status === 'published') fields.visibility = 'public';
     }
 
     await updateEntry(db, entryId, fields);
 
+    // Update tags: parse → find/create → replace
+    if (tagsRaw !== undefined) {
+      const tagNames = parseManualTags(tagsRaw);
+      const tagIds = await Promise.all(tagNames.map((name) => findOrCreateTag(db, name)));
+      await replaceEntryTags(db, entryId, tagIds);
+    }
+
     const displayName = title || (entry as any).title || entryId;
     const statusNote = status ? ` 狀態：${status}` : '';
+    const tagsNote = tagsRaw !== undefined
+      ? ` 標籤：${parseManualTags(tagsRaw).join(', ') || '（已清除）'}`
+      : '';
     return {
       type: 4,
       data: {
-        content: `✅ 已更新「${displayName}」${statusNote}`,
+        content: `✅ 已更新「${displayName}」${statusNote}${tagsNote}`,
         flags: 64,
       },
     };

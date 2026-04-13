@@ -138,6 +138,47 @@ export async function getPublicEntryBySlug(db: D1Database, slug: string) {
     .first();
 }
 
+export async function getAdjacentPublicArticles(
+  db: D1Database,
+  currentEntryId: string,
+  currentPublishedAt: string | null,
+  currentCreatedAt: string
+) {
+  const sortDate = currentPublishedAt || currentCreatedAt;
+
+  const newer = await db
+    .prepare(
+      `SELECT id, slug, title, created_at, published_at
+       FROM entries
+       WHERE entry_type = 'article'
+         AND status = 'published'
+         AND visibility = 'public'
+         AND id != ?
+         AND COALESCE(published_at, created_at) > ?
+       ORDER BY COALESCE(published_at, created_at) ASC
+       LIMIT 1`
+    )
+    .bind(currentEntryId, sortDate)
+    .first();
+
+  const older = await db
+    .prepare(
+      `SELECT id, slug, title, created_at, published_at
+       FROM entries
+       WHERE entry_type = 'article'
+         AND status = 'published'
+         AND visibility = 'public'
+         AND id != ?
+         AND COALESCE(published_at, created_at) < ?
+       ORDER BY COALESCE(published_at, created_at) DESC
+       LIMIT 1`
+    )
+    .bind(currentEntryId, sortDate)
+    .first();
+
+  return { newer, older };
+}
+
 /**
  * Create new entry with validation
  */
@@ -281,6 +322,30 @@ export async function deleteEntry(db: D1Database, id: string) {
   await db.prepare('DELETE FROM entry_tags WHERE entry_id = ?').bind(id).run();
   await db.prepare('DELETE FROM assets WHERE entry_id = ?').bind(id).run();
   return await db.prepare('DELETE FROM entries WHERE id = ?').bind(id).run();
+}
+
+/**
+ * Get tag slugs for an entry
+ */
+export async function getTagsByEntryId(db: D1Database, entryId: string): Promise<string[]> {
+  const result = await db
+    .prepare('SELECT tags.slug FROM tags INNER JOIN entry_tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id = ?')
+    .bind(entryId)
+    .all();
+  return (result.results as { slug: string }[]).map((r) => r.slug);
+}
+
+/**
+ * Replace all tags for an entry (clear then insert)
+ */
+export async function replaceEntryTags(db: D1Database, entryId: string, tagIds: string[]) {
+  await db.prepare('DELETE FROM entry_tags WHERE entry_id = ?').bind(entryId).run();
+  for (const tagId of tagIds) {
+    await db
+      .prepare('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)')
+      .bind(entryId, tagId)
+      .run();
+  }
 }
 
 /**

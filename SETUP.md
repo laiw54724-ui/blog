@@ -17,6 +17,21 @@ eval "$(fnm env --shell zsh)"
 fnm use 22.12.0
 ```
 
+如果 `fnm current` 顯示 `v22.12.0`，但 `node -v` 還是 `v20.x`，代表目前 shell 沒有正確載入 `fnm`。
+請把這行加入 `~/.zshrc`，再重開一個終端：
+
+```bash
+eval "$(fnm env --shell zsh)"
+```
+
+接著確認：
+
+```bash
+fnm current
+node -v
+npm run check:node
+```
+
 ## 安裝依賴
 
 ```bash

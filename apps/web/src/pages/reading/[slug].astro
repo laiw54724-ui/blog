@@ -1,0 +1,447 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getReadingEntryBySlug } from '../../lib/data';
+import { renderMarkdownToHtml } from '../../lib/markdown';
+import {
+  CONTENT_LOCK_COOKIE,
+  getContentLockPassword,
+  hasLockedTags,
+  hasUnlockedCookie,
+} from '../../lib/access';
+import {
+  GENRE_LABELS,
+  MEDIUM_LABELS,
+  READ_STATUS_LABELS,
+  WORK_STATUS_LABELS,
+  formatScore,
+  parseReadingTags,
+} from '../../lib/reading';
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect('/reading');
+
+const entry = await getReadingEntryBySlug(slug);
+if (!entry) return Astro.redirect('/reading');
+
+const tags = parseReadingTags(entry.tags);
+const links: Array<{ label: string; url: string }> = (() => { try { return JSON.parse(entry.links); } catch { return []; } })();
+const requiresLock = hasLockedTags(tags);
+const lockPassword = getContentLockPassword();
+const unlocked = requiresLock
+  ? hasUnlockedCookie(Astro.cookies.get(CONTENT_LOCK_COOKIE)?.value)
+  : true;
+
+let lockError = '';
+if (requiresLock && lockPassword && Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const submittedPassword = String(formData.get('password') || '').trim();
+  if (submittedPassword && submittedPassword === lockPassword) {
+    Astro.cookies.set(CONTENT_LOCK_COOKIE, submittedPassword, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      secure: true,
+      maxAge: 60 * 60 * 8,
+    });
+    return Astro.redirect(Astro.url.pathname);
+  }
+  lockError = '密碼不正確。';
+}
+
+const genreLabel = GENRE_LABELS[entry.genre] ?? entry.genre;
+const mediumLabel = MEDIUM_LABELS[entry.medium] ?? entry.medium;
+const readStatusLabel = READ_STATUS_LABELS[entry.read_status] ?? entry.read_status;
+const workStatusLabel = entry.work_status !== 'unknown' ? WORK_STATUS_LABELS[entry.work_status] : null;
+const scoreNum = entry.score ?? undefined;
+const hasReview = entry.has_detail === 1 && !!entry.detail_review;
+const reviewHtml = hasReview ? await renderMarkdownToHtml(entry.detail_review!) : '';
+---
+
+<BaseLayout
+  title={`${entry.title} | 閱讀 | Double River`}
+  description={entry.short_review ?? `${entry.title}${entry.author ? ` by ${entry.author}` : ''} 的閱讀記錄`}
+  serifFont={true}
+>
+  {requiresLock && lockPassword && !unlocked ? (
+    <div class="reading-lock-shell">
+      <div class="reading-lock-card">
+        <p class="reading-lock-kicker">protected content</p>
+        <h1>這篇內容已上鎖</h1>
+        <p class="reading-lock-desc">這篇閱讀心得帶有需要保護的 tag。輸入密碼後才會顯示內容。</p>
+        <form method="POST" class="reading-lock-form">
+          <label class="reading-lock-label" for="lockPassword">密碼</label>
+          <input id="lockPassword" name="password" type="password" required />
+          {lockError && <p class="reading-lock-error">{lockError}</p>}
+          <button type="submit">解鎖閱讀內容</button>
+        </form>
+        <a href="/reading" class="reading-lock-back">← 回到閱讀清單</a>
+      </div>
+    </div>
+  ) : (
+  <div class="reading-detail-shell">
+    <nav class="breadcrumb" aria-label="頁面位置">
+      <a href="/reading">閱讀</a>
+      <span aria-hidden="true">›</span>
+      <span class="breadcrumb-genre">{genreLabel}</span>
+      <span aria-hidden="true">›</span>
+      <span>{entry.title}</span>
+    </nav>
+
+    <header class="detail-header">
+      <div class="detail-meta-badges">
+        <span class={`badge badge-genre badge-genre-${entry.genre}`}>{genreLabel}</span>
+        <span class="badge badge-medium">{mediumLabel}</span>
+        <span class={`badge badge-status badge-status-${entry.read_status}`}>{readStatusLabel}</span>
+        {workStatusLabel && <span class="badge badge-work-status">{workStatusLabel}</span>}
+      </div>
+
+      <h1 class="detail-title">{entry.title}</h1>
+      {entry.alt_title && <p class="detail-alt-title">{entry.alt_title}</p>}
+      {entry.author && <p class="detail-author">by {entry.author}</p>}
+
+      {entry.short_review && (
+        <blockquote class="detail-short-review">{entry.short_review}</blockquote>
+      )}
+
+      <div class="detail-meta-row">
+        {scoreNum !== undefined && (
+          <div class="meta-item">
+            <span class="meta-label">評分</span>
+            <span class={`meta-score score-${scoreNum >= 9 ? 'high' : scoreNum >= 7 ? 'mid' : 'low'}`}>
+              {formatScore(scoreNum)}
+            </span>
+          </div>
+        )}
+        {entry.read_at && (
+          <div class="meta-item">
+            <span class="meta-label">閱讀日期</span>
+            <span>{entry.read_at}</span>
+          </div>
+        )}
+      </div>
+
+      {tags.length > 0 && (
+        <div class="detail-tags">
+          {tags.map((tag) => (
+            <span class="tag-chip">#{tag}</span>
+          ))}
+        </div>
+      )}
+    </header>
+
+    <div class="detail-body">
+      {entry.blurb && (
+        <section class="detail-blurb">
+          <h2 class="section-label">文案</h2>
+          <p>{entry.blurb}</p>
+        </section>
+      )}
+
+      {hasReview ? (
+        <section class="detail-review prose">
+          <Fragment set:html={reviewHtml} />
+        </section>
+      ) : (
+        <p class="detail-no-content">這本的完整心得之後補。</p>
+      )}
+
+      {links.length > 0 && (
+        <section class="detail-links">
+          <h2 class="section-label">連結</h2>
+          <ul class="links-list">
+            {links.map((link) => (
+              <li>
+                <a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+
+    <footer class="detail-footer">
+      <a href="/reading" class="back-link">← 回到閱讀清單</a>
+    </footer>
+  </div>
+  )}
+</BaseLayout>
+
+<style>
+  .reading-lock-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 4rem;
+  }
+
+  .reading-lock-card {
+    padding: 1.5rem;
+    border: 1px solid #e0daf5;
+    border-radius: 18px;
+    background: #fff;
+  }
+
+  .reading-lock-kicker {
+    margin: 0 0 0.4rem;
+    color: #9892ae;
+    font-size: 0.76rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .reading-lock-card h1 {
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.8rem, 5vw, 2.4rem);
+  }
+
+  .reading-lock-desc {
+    margin: 0 0 1rem;
+    color: #625c78;
+    line-height: 1.7;
+  }
+
+  .reading-lock-form {
+    display: grid;
+    gap: 0.65rem;
+    max-width: 20rem;
+  }
+
+  .reading-lock-label {
+    font-size: 0.85rem;
+    color: #6b6482;
+  }
+
+  .reading-lock-form input {
+    padding: 0.8rem 0.9rem;
+    border: 1px solid #d8d2ec;
+    border-radius: 12px;
+    font: inherit;
+  }
+
+  .reading-lock-form button {
+    border: none;
+    border-radius: 999px;
+    background: var(--reading-accent, #a85f43);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    padding: 0.78rem 1.1rem;
+    cursor: pointer;
+  }
+
+  .reading-lock-error {
+    margin: 0;
+    color: #b34747;
+    font-size: 0.9rem;
+  }
+
+  .reading-lock-back {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--reading-accent, #a85f43);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .reading-detail-shell {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.85rem;
+    color: #9892ae;
+  }
+  .breadcrumb a { color: var(--reading-accent, #a85f43); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb-genre { color: #7a7494; }
+
+  .detail-header {
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e8e4f4;
+  }
+
+  .detail-meta-badges {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .detail-title {
+    font-size: clamp(1.8rem, 5vw, 2.8rem);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    margin: 0 0 0.3rem;
+    color: #1e1d2e;
+  }
+
+  .detail-alt-title { margin: 0 0 0.3rem; color: #8a8498; font-size: 0.95rem; }
+  .detail-author { margin: 0 0 1rem; color: #7a7494; font-size: 1rem; }
+
+  .detail-short-review {
+    margin: 0.75rem 0 1rem;
+    padding: 0.75rem 1.1rem;
+    border-left: 3px solid var(--reading-accent, #a85f43);
+    background: var(--reading-card, #fffaf6);
+    border-radius: 0 10px 10px 0;
+    color: #4a4260;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    font-style: italic;
+  }
+
+  .detail-meta-row {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin: 0.75rem 0;
+  }
+
+  .meta-item { display: flex; gap: 0.45rem; align-items: baseline; font-size: 0.9rem; }
+  .meta-label {
+    color: #9892ae;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .meta-score { font-weight: 700; font-size: 1.2rem; }
+  .score-high { color: #2d7a54; }
+  .score-mid  { color: #5a6aba; }
+  .score-low  { color: #8a8098; }
+
+  .detail-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+  .tag-chip {
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid #e0daf5;
+    background: #f5f3fb;
+    color: #5e5a8a;
+    font-size: 0.8rem;
+  }
+
+  .detail-body { display: flex; flex-direction: column; gap: 2rem; }
+
+  .section-label {
+    margin: 0 0 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #9892ae;
+  }
+
+  .detail-blurb p {
+    margin: 0;
+    color: #5e5a72;
+    line-height: 1.85;
+    font-size: 0.97rem;
+  }
+
+  .prose {
+    color: #2b2d43;
+    line-height: 1.9;
+    font-family: var(--serif, 'Noto Serif TC', Georgia, serif);
+    font-size: 1.02rem;
+  }
+
+  .prose :global(h2) {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #3a3650;
+    margin: 1.75rem 0 0.5rem;
+    font-family: var(--sans, system-ui, sans-serif);
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid #e8e4f4;
+    padding-bottom: 0.3rem;
+  }
+
+  .prose :global(h3) {
+    font-size: 0.97rem;
+    font-weight: 700;
+    color: #5e5a8a;
+    margin: 1.25rem 0 0.4rem;
+    font-family: var(--sans, system-ui, sans-serif);
+  }
+
+  .prose :global(p) { margin: 0 0 1.1rem; }
+  .prose :global(ul), .prose :global(ol) { padding-left: 1.4rem; margin: 0.5rem 0 1rem; }
+  .prose :global(li) { margin-bottom: 0.35rem; }
+
+  .detail-no-content {
+    padding: 1.5rem;
+    border: 1px dashed #d8d4ee;
+    border-radius: 10px;
+    color: #9892ae;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  .links-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .links-list a {
+    display: inline-block;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid #d8d4ee;
+    border-radius: 999px;
+    color: var(--reading-accent, #a85f43);
+    font-size: 0.88rem;
+    text-decoration: none;
+  }
+
+  .links-list a:hover { background: var(--reading-card, #fffaf6); border-color: var(--reading-accent, #a85f43); }
+
+  .detail-footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #e8e4f4; }
+  .back-link { color: var(--reading-accent, #a85f43); font-size: 0.92rem; text-decoration: none; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 0.22rem 0.58rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .badge-genre-bl  { background: #ede9ff; color: #5a4ea0; }
+  .badge-genre-bg  { background: #e6f0ff; color: #3a5fa0; }
+  .badge-genre-gl  { background: #fce9f4; color: #a04079; }
+  .badge-genre-gen { background: #f0f0f0; color: #666; }
+  .badge-medium { background: #f2f0fb; color: #6259a0; }
+  .badge-status-completed { background: #e6f9ef; color: #2d7a54; }
+  .badge-status-ongoing   { background: #fff4e0; color: #8a5a00; }
+  .badge-status-dropped   { background: #fde9e9; color: #8a3030; }
+  .badge-work-status { background: #f5f5f5; color: #888; font-size: 0.72rem; }
+
+  @media (prefers-color-scheme: dark) {
+    .detail-header { border-color: #2e2b48; }
+    .detail-title { color: #e8e4f8; }
+    .detail-short-review { background: #211f35; border-color: #c09070; color: #c8c0e0; }
+    .tag-chip { border-color: #3a3650; background: #1e1c30; color: #a09cc4; }
+    .detail-no-content { border-color: #3a3650; }
+    .prose { color: #d0ceea; }
+    .prose :global(h2) { color: #c8c4e8; border-color: #2e2b48; }
+    .detail-footer { border-color: #2e2b48; }
+    .links-list a { border-color: #3a3650; }
+  }
+
+  @media (max-width: 640px) {
+    .reading-detail-shell { padding: 1.25rem 1rem 3rem; }
+    .detail-title { font-size: 1.8rem; }
+  }
+</style>

@@ -1,8 +1,9 @@
 import type { Context } from 'hono';
 import type { D1Database, ExecutionContext, R2Bucket } from '@cloudflare/workers-types';
-import type { Entry } from '@personal-blog/shared';
+import { normalizeTagInput, resolveLockModeTags, type Entry } from '@personal-blog/shared';
 import { verifyDiscordSignature } from './verify';
 import { CHINESE_TO_ENGLISH_COMMAND_MAP, getCommandPreset } from './presets';
+import { parseManualTags } from './createEntry';
 import { openCreateModal } from './handlers/create';
 import { handleCreateModal, handleEditModal } from './handlers/modal';
 import { sendListFollowup } from './handlers/list';
@@ -12,6 +13,7 @@ import { processAttachments } from './attachments';
 import {
   createReadingEntry,
   findReadingEntriesByTitle,
+  getReadingEntryBySlug,
   listReadingEntries,
   updateReadingEntry,
 } from '@personal-blog/shared/reading-db';
@@ -51,6 +53,11 @@ interface DiscordModalRow {
 }
 
 type DiscordEntry = Pick<Entry, 'id' | 'title' | 'cover_asset_id'>;
+type ReadingListFilters = {
+  keyword?: string;
+  status?: 'completed' | 'ongoing' | 'dropped';
+  tag?: string;
+};
 
 function resolveCommandKey(name: string, options: DiscordAttachmentOption[] = []): string {
   const base = CHINESE_TO_ENGLISH_COMMAND_MAP[name] || name;
@@ -115,9 +122,10 @@ function buildHelpMessage() {
     '',
     '6. `/讀了`',
     '新增閱讀記錄：作品名、作者、分類、狀態',
+    '可選評分、日期、tags、上鎖模式',
     '',
     '7. `/補心得`',
-    '補短評、文案或詳細心得',
+    '表單編輯短評、評分、日期、文案與詳細心得',
     '',
     '8. `/改狀態`',
     '把閱讀改成讀完、追更中或棄文',
@@ -126,7 +134,7 @@ function buildHelpMessage() {
     '查看最近閱讀記錄，或用關鍵字搜尋',
     '',
     'Tag 規則',
-    'structured tags：genre / tone / setting / relationship / topic',
+    'structured tags：genre / medium / tone / setting / relationship / warning / topic',
     'free tags：其他自由關鍵字',
     '例：proof -> topic:proof，travel -> setting:travel',
   ].join('\n');
@@ -178,8 +186,147 @@ function normalizeReadAt(value: string | undefined): string | undefined {
   return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
 }
 
+function normalizeReadingTagInput(value: string | undefined): string[] {
+  if (!value) return [];
+  return Array.from(
+    new Set(
+      parseManualTags(value)
+        .map((tag) => normalizeTagInput(tag).slug)
+        .filter(Boolean)
+    )
+  );
+}
 
-function readingReviewModal(title: string, slug: string) {
+function isLockModeValue(value: string): value is 'none' | '18plus' | 'controversial' {
+  return value === 'none' || value === '18plus' || value === 'controversial';
+}
+
+function formatLockModePreview(value: string | undefined): string {
+  if (value === '18plus') return '18+';
+  if (value === 'controversial') return '爭議題材';
+  return '未上鎖';
+}
+
+function parseStoredReadingTags(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatReadingTagPreview(tags: string[]): string {
+  if (tags.length === 0) return '—';
+  return tags.slice(0, 4).join('、');
+}
+
+async function buildReadingListPayload(
+  db: D1Database,
+  filters: ReadingListFilters = {}
+): Promise<{
+  content: string;
+  embeds?: object[];
+  components?: object[];
+}> {
+  const baseEntries = filters.keyword
+    ? await findReadingEntriesByTitle(db, filters.keyword, 20)
+    : await listReadingEntries(db, {
+        read_status: filters.status,
+        sort: 'read_at',
+        limit: 30,
+      });
+
+  const normalizedTag = filters.tag ? normalizeTagInput(filters.tag).slug : '';
+  const entries = baseEntries
+    .filter((entry) => {
+      if (filters.status && entry.read_status !== filters.status) return false;
+      if (!normalizedTag) return true;
+      const tags = parseStoredReadingTags(entry.tags).map((tag) => normalizeTagInput(tag).slug);
+      return tags.includes(normalizedTag);
+    })
+    .slice(0, 5);
+
+  const filterSummary = [
+    filters.keyword ? `關鍵字：${filters.keyword}` : '',
+    filters.status ? `狀態：${labelReadStatus(filters.status)}` : '',
+    normalizedTag ? `tag：${normalizedTag}` : '',
+  ]
+    .filter(Boolean)
+    .join('｜');
+
+  if (entries.length === 0) {
+    return {
+      content: filterSummary
+        ? `目前沒有符合條件的閱讀記錄。\n${filterSummary}`
+        : '目前沒有符合條件的閱讀記錄。',
+      components: [],
+    };
+  }
+
+  const fields = entries.map((entry, index) => {
+    const tags = parseStoredReadingTags(entry.tags);
+    return {
+      name: `${index + 1}. ${entry.title}`,
+      value: [
+        entry.author ? `作者：${entry.author}` : '作者：—',
+        `狀態：${labelReadStatus(entry.read_status)}｜評分：${
+          entry.score != null ? entry.score.toFixed(1) : '—'
+        }｜日期：${entry.read_at || '—'}`,
+        `tags：${formatReadingTagPreview(tags)}`,
+        `slug：\`${entry.slug}\``,
+      ].join('\n'),
+      inline: false,
+    };
+  });
+
+  return {
+    content: filterSummary ? `閱讀清單｜${filterSummary}` : '閱讀清單',
+    embeds: [
+      {
+        title: '📚 閱讀清單',
+        color: 0x8f6bdc,
+        fields,
+        footer: { text: '從下方選一筆，就可以編輯或刪除。' },
+      },
+    ],
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 3,
+            custom_id: 'reading_select',
+            placeholder: '選擇一筆閱讀記錄管理',
+            min_values: 1,
+            max_values: 1,
+            options: entries.map((entry, index) => ({
+              label: `${index + 1}. ${entry.title}`.slice(0, 100),
+              description: `${labelReadStatus(entry.read_status)}｜${entry.author || '未知作者'}｜${entry.slug}`.slice(0, 100),
+              value: entry.slug,
+            })),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+
+function readingReviewModal(
+  title: string,
+  slug: string,
+  existing?: {
+    score?: number | null;
+    read_at?: string | null;
+    short_review?: string | null;
+    blurb?: string | null;
+    detail_review?: string | null;
+  }
+) {
+  const withValue = (value?: string | null) => (value ? { value } : {});
+
   return {
     type: 9,
     data: {
@@ -188,15 +335,166 @@ function readingReviewModal(title: string, slug: string) {
       components: [
         {
           type: 1,
-          components: [{ type: 4, custom_id: 'short_review', label: '短評（選填）', style: 1, required: false, max_length: 280, placeholder: '一句話記下你的感受' }],
+          components: [{
+            type: 4,
+            custom_id: 'score',
+            label: '評分（選填）',
+            style: 1,
+            required: false,
+            max_length: 10,
+            placeholder: '0-10，可用小數',
+            ...withValue(
+              existing?.score != null && Number.isFinite(existing.score)
+                ? String(existing.score)
+                : undefined
+            ),
+          }],
         },
         {
           type: 1,
-          components: [{ type: 4, custom_id: 'blurb', label: '文案 / 簡介（選填）', style: 2, required: false, max_length: 4000, placeholder: '貼作品簡介或文案' }],
+          components: [{
+            type: 4,
+            custom_id: 'read_at',
+            label: '閱讀日期（選填）',
+            style: 1,
+            required: false,
+            max_length: 10,
+            placeholder: 'YYYY-MM-DD',
+            ...withValue(existing?.read_at),
+          }],
         },
         {
           type: 1,
-          components: [{ type: 4, custom_id: 'detail_review', label: '詳細心得（選填）', style: 2, required: false, max_length: 4000, placeholder: '完整心得之後慢慢補也可以' }],
+          components: [{
+            type: 4,
+            custom_id: 'short_review',
+            label: '短評（選填）',
+            style: 1,
+            required: false,
+            max_length: 280,
+            placeholder: '一句話記下你的感受',
+            ...withValue(existing?.short_review),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'blurb',
+            label: '文案 / 簡介（選填）',
+            style: 2,
+            required: false,
+            max_length: 4000,
+            placeholder: '貼作品簡介或文案',
+            ...withValue(existing?.blurb),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'detail_review',
+            label: '詳細心得（選填）',
+            style: 2,
+            required: false,
+            max_length: 4000,
+            placeholder: '完整心得之後慢慢補也可以',
+            ...withValue(existing?.detail_review),
+          }],
+        },
+      ],
+    },
+  };
+}
+
+function readingEditModal(
+  title: string,
+  slug: string,
+  existing?: {
+    title?: string | null;
+    author?: string | null;
+    read_status?: string | null;
+    score?: number | null;
+    read_at?: string | null;
+    tags?: string | null;
+  }
+) {
+  const withValue = (value?: string | null) => (value ? { value } : {});
+  const storedTags = parseStoredReadingTags(existing?.tags).join(', ');
+
+  return {
+    type: 9,
+    data: {
+      custom_id: `reading_edit_modal:${slug}`,
+      title: `編輯閱讀：${title.slice(0, 40)}`,
+      components: [
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'title',
+            label: '作品名',
+            style: 1,
+            required: true,
+            max_length: 200,
+            ...withValue(existing?.title || title),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'status',
+            label: '狀態',
+            style: 1,
+            required: false,
+            max_length: 20,
+            placeholder: 'completed / ongoing / dropped',
+            ...withValue(existing?.read_status),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'score',
+            label: '評分（選填）',
+            style: 1,
+            required: false,
+            max_length: 10,
+            placeholder: '0-10，可用小數',
+            ...withValue(
+              existing?.score != null && Number.isFinite(existing.score)
+                ? String(existing.score)
+                : undefined
+            ),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'read_at',
+            label: '閱讀日期（選填）',
+            style: 1,
+            required: false,
+            max_length: 10,
+            placeholder: 'YYYY-MM-DD',
+            ...withValue(existing?.read_at),
+          }],
+        },
+        {
+          type: 1,
+          components: [{
+            type: 4,
+            custom_id: 'tags',
+            label: '標籤（選填）',
+            style: 1,
+            required: false,
+            max_length: 200,
+            placeholder: 'genre:bl relationship:older-seme topic:reading',
+            ...withValue(storedTags),
+          }],
         },
       ],
     },
@@ -283,6 +581,8 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
       const statusRaw = extractOptionValue(options, 'status')?.trim().toLowerCase();
       const scoreRaw = extractOptionValue(options, 'score')?.trim();
       const readAtRaw = extractOptionValue(options, 'read_at');
+      const tagsRaw = extractOptionValue(options, 'tags');
+      const lockModeRaw = extractOptionValue(options, 'lock_mode')?.trim().toLowerCase();
 
       if (!title) {
         return c.json({ type: 4, data: { content: '❌ 作品名不能為空', flags: 64 } });
@@ -308,6 +608,20 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
         });
       }
 
+      if (lockModeRaw && !isLockModeValue(lockModeRaw)) {
+        return c.json({
+          type: 4,
+          data: { content: '❌ 上鎖模式不正確，請重新選擇指令選項', flags: 64 },
+        });
+      }
+
+      const tags = Array.from(
+        new Set([
+          ...normalizeReadingTagInput(tagsRaw),
+          ...resolveLockModeTags(lockModeRaw),
+        ])
+      );
+
       const result = await createReadingEntry(db, {
         title,
         author: author || undefined,
@@ -316,6 +630,7 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
         read_status: statusRaw,
         score,
         read_at: readAt,
+        tags,
         source: 'discord',
       });
 
@@ -323,6 +638,8 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
         author ? `作者：${author}` : '',
         score !== undefined ? `評分：${score.toFixed(1)}` : '',
         readAt ? `閱讀日期：${readAt}` : '',
+        tags.length > 0 ? `標籤：${tags.join('、')}` : '',
+        lockModeRaw ? `上鎖：${formatLockModePreview(lockModeRaw)}` : '',
       ].filter(Boolean);
 
       return c.json({
@@ -355,11 +672,15 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
       });
 
       if (exactMatches.length === 1) {
-        return c.json(readingReviewModal(exactMatches[0].title, exactMatches[0].slug));
+        const target = await getReadingEntryBySlug(db, exactMatches[0].slug);
+        return c.json(
+          readingReviewModal(exactMatches[0].title, exactMatches[0].slug, target ?? undefined)
+        );
       }
 
       if (matches.length === 1) {
-        return c.json(readingReviewModal(matches[0].title, matches[0].slug));
+        const target = await getReadingEntryBySlug(db, matches[0].slug);
+        return c.json(readingReviewModal(matches[0].title, matches[0].slug, target ?? undefined));
       }
 
       const lines = matches.map((entry, index) => {
@@ -400,28 +721,17 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
     if (commandKey === 'reading_list') {
       const keyword = extractOptionValue(options, 'keyword')?.trim();
       const status = extractOptionValue(options, 'status')?.trim();
-      const entries = keyword
-        ? await findReadingEntriesByTitle(db, keyword, 10)
-        : await listReadingEntries(db, {
-            read_status: status as 'completed' | 'ongoing' | 'dropped' | undefined,
-            sort: 'read_at',
-            limit: 10,
-          });
-
-      if (entries.length === 0) {
-        return c.json({ type: 4, data: { content: '目前沒有符合條件的閱讀記錄。', flags: 64 } });
-      }
-
-      const lines = entries.map((entry, index) => {
-        const score = entry.score != null ? `｜${entry.score.toFixed(1)}` : '';
-        const author = entry.author ? `｜${entry.author}` : '';
-        return `${index + 1}. ${entry.title}${author}｜${entry.read_status}${score}`;
+      const tag = extractOptionValue(options, 'tag')?.trim();
+      const payload = await buildReadingListPayload(db, {
+        keyword,
+        status: status as 'completed' | 'ongoing' | 'dropped' | undefined,
+        tag,
       });
 
       return c.json({
         type: 4,
         data: {
-          content: `閱讀清單\n\n${lines.join('\n')}`,
+          ...payload,
           flags: 64,
         },
       });
@@ -689,9 +999,7 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
 
     if (customId.startsWith('reading_review_modal:')) {
       const slug = customId.slice('reading_review_modal:'.length);
-      const entry = await findReadingEntriesByTitle(db, slug, 1);
-      const target =
-        entry[0]?.slug === slug ? entry[0] : (await listReadingEntries(db, { limit: 500 })).find((item) => item.slug === slug);
+      const target = await getReadingEntryBySlug(db, slug);
       if (!target) {
         return c.json({ type: 4, data: { content: '❌ 找不到此閱讀記錄', flags: 64 } });
       }
@@ -701,16 +1009,125 @@ export async function handleDiscordInteraction(c: Context<{ Bindings: DiscordEnv
           .flatMap((row) => row.components ?? [])
           .find((component) => component.custom_id === id)?.value || '';
 
+      const scoreValue = get('score').trim();
+      if (scoreValue) {
+        const score = parseReadingScore(scoreValue);
+        if (Number.isNaN(score)) {
+          return c.json({
+            type: 4,
+            data: { content: '❌ 評分請填 0 到 10 之間的數字', flags: 64 },
+          });
+        }
+      }
+
+      const readAtValue = get('read_at').trim();
+      if (readAtValue) {
+        const normalized = normalizeReadAt(readAtValue);
+        if (normalized === '') {
+          return c.json({
+            type: 4,
+            data: {
+              content: '❌ 閱讀日期請用 YYYY-MM-DD，例如 2026-04-10',
+              flags: 64,
+            },
+          });
+        }
+      }
+
+      const score = scoreValue ? parseReadingScore(scoreValue) : null;
+      const readAt = readAtValue ? normalizeReadAt(readAtValue) : null;
+      const shortReview = get('short_review').trim();
+      const blurb = get('blurb').trim();
+      const detailReview = get('detail_review').trim();
+
       await updateReadingEntry(db, target.id, {
-        short_review: get('short_review').trim() || null,
-        blurb: get('blurb').trim() || null,
-        detail_review: get('detail_review').trim() || null,
+        score: scoreValue ? (score ?? null) : null,
+        read_at: readAtValue ? (readAt ?? null) : null,
+        short_review: shortReview || null,
+        blurb: blurb || null,
+        detail_review: detailReview || null,
+      });
+
+      const summary = [
+        scoreValue && score != null ? `評分：${score.toFixed(1)}` : '',
+        readAt ? `日期：${readAt}` : '',
+        shortReview ? '已更新短評' : '',
+        detailReview ? '已更新詳細心得' : '',
+      ].filter(Boolean);
+
+      return c.json({
+        type: 4,
+        data: {
+          content: `✅ 已更新「${target.title}」\n${summary.join('｜') || '欄位已儲存'}`,
+          flags: 64,
+        },
+      });
+    }
+
+    if (customId.startsWith('reading_edit_modal:')) {
+      const slug = customId.slice('reading_edit_modal:'.length);
+      const target = await getReadingEntryBySlug(db, slug);
+      if (!target) {
+        return c.json({ type: 4, data: { content: '❌ 找不到此閱讀記錄', flags: 64 } });
+      }
+
+      const get = (id: string) =>
+        (components as DiscordModalRow[])
+          .flatMap((row) => row.components ?? [])
+          .find((component) => component.custom_id === id)?.value || '';
+
+      const title = get('title').trim();
+      if (!title) {
+        return c.json({ type: 4, data: { content: '❌ 作品名不能為空', flags: 64 } });
+      }
+
+      const statusValue = get('status').trim().toLowerCase();
+      if (statusValue && !isReadStatus(statusValue)) {
+        return c.json({ type: 4, data: { content: '❌ 狀態請填 completed / ongoing / dropped', flags: 64 } });
+      }
+
+      const scoreValue = get('score').trim();
+      if (scoreValue) {
+        const score = parseReadingScore(scoreValue);
+        if (Number.isNaN(score)) {
+          return c.json({ type: 4, data: { content: '❌ 評分請填 0 到 10 之間的數字', flags: 64 } });
+        }
+      }
+
+      const readAtValue = get('read_at').trim();
+      if (readAtValue) {
+        const normalized = normalizeReadAt(readAtValue);
+        if (normalized === '') {
+          return c.json({
+            type: 4,
+            data: { content: '❌ 閱讀日期請用 YYYY-MM-DD，例如 2026-04-10', flags: 64 },
+          });
+        }
+      }
+
+      const score = scoreValue ? parseReadingScore(scoreValue) : null;
+      const readAt = readAtValue ? normalizeReadAt(readAtValue) : null;
+      const tags = normalizeReadingTagInput(get('tags').trim());
+
+      await updateReadingEntry(db, target.id, {
+        title,
+        read_status: statusValue ? (statusValue as 'completed' | 'ongoing' | 'dropped') : target.read_status,
+        score: scoreValue ? (score ?? null) : null,
+        read_at: readAtValue ? (readAt ?? null) : null,
+        tags,
       });
 
       return c.json({
         type: 4,
         data: {
-          content: `✅ 已更新「${target.title}」的心得`,
+          content: `✅ 已更新「${title}」\n${[
+            statusValue ? `狀態：${labelReadStatus(statusValue)}` : '',
+            scoreValue && score != null ? `評分：${score.toFixed(1)}` : '',
+            readAt ? `日期：${readAt}` : '',
+            tags.length > 0 ? `標籤：${tags.join('、')}` : '',
+          ]
+            .filter(Boolean)
+            .join('｜') || '欄位已儲存'}`,
           flags: 64,
         },
       });
