@@ -36,7 +36,7 @@
   }
 
   .reader-controls-label {
-    color: #8a86a6;
+    color: #625d78;
     font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -95,100 +95,4 @@
   }
 </style>
 
-<script>
-  // @ts-nocheck
-  /**
-   * @typedef {'small' | 'medium' | 'large'} ReaderSize
-   */
-
-  const STORAGE_KEY = 'blog-reader-size';
-  const VISIBILITY_BOUND_KEY = 'readerControlsScrollBound';
-
-  /** @type {Record<ReaderSize, { fontSize: string; lineHeight: string }>} */
-  const READER_SIZES = {
-    small: { fontSize: '0.96rem', lineHeight: '1.78' },
-    medium: { fontSize: '1.08rem', lineHeight: '1.9' },
-    large: { fontSize: '1.22rem', lineHeight: '2.02' },
-  };
-
-  /**
-   * @param {string | null | undefined} value
-   * @returns {ReaderSize}
-   */
-  function parseSize(/** @type {string | null | undefined} */ value) {
-    return value === 'small' || value === 'medium' || value === 'large' ? value : 'medium';
-  }
-
-  /**
-   * @param {ReaderSize} size
-   * @param {HTMLElement} target
-   * @param {HTMLElement} root
-   */
-  function applySize(
-    /** @type {ReaderSize} */ size,
-    /** @type {HTMLElement} */ target,
-    /** @type {HTMLElement} */ root
-  ) {
-    const preset = READER_SIZES[/** @type {ReaderSize} */ (size)];
-    target.style.fontSize = preset.fontSize;
-    target.style.lineHeight = preset.lineHeight;
-
-    root.querySelectorAll('.reader-size-btn').forEach((/** @type {Element} */ button) => {
-      if (!(button instanceof HTMLButtonElement)) return;
-      button.classList.toggle('is-active', button.dataset.size === size);
-    });
-  }
-
-  /**
-   * @param {ReaderSize} size
-   */
-  function saveSize(/** @type {ReaderSize} */ size) {
-    localStorage.setItem(STORAGE_KEY, size);
-  }
-
-  /**
-   * @returns {ReaderSize}
-   */
-  function getSavedSize() {
-    return parseSize(localStorage.getItem(STORAGE_KEY));
-  }
-
-  function initReaderControls() {
-    const root = document.querySelector('[data-reader-controls]');
-    if (!(root instanceof HTMLElement)) return;
-
-    const target = document.querySelector('.post-text, .markdown-content');
-    if (!(target instanceof HTMLElement)) return;
-
-    const saved = getSavedSize();
-    applySize(saved, target, root);
-
-    root.querySelectorAll('.reader-size-btn').forEach((button) => {
-      if (!(button instanceof HTMLButtonElement)) return;
-      button.addEventListener('click', () => {
-        const size = parseSize(button.dataset.size);
-        applySize(size, target, root);
-        saveSize(size);
-      });
-    });
-
-    if (root.dataset.scrollBound !== '1') {
-      let lastScrollY = window.scrollY;
-      window.addEventListener(
-        'scroll',
-        () => {
-          const currentScrollY = window.scrollY;
-          const shouldHide = currentScrollY > lastScrollY && currentScrollY > 120;
-          root.classList.toggle('is-hidden', shouldHide);
-          lastScrollY = currentScrollY;
-        },
-        { passive: true }
-      );
-      root.dataset.scrollBound = '1';
-    }
-  }
-
-  if (document.querySelector('.post-text, .markdown-content')) {
-    initReaderControls();
-  }
-</script>
+<script src="../scripts/reader-controls.ts"></script>

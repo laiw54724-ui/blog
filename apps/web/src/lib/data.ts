@@ -29,13 +29,15 @@ async function apiFetch(path: string): Promise<Response> {
       // Use service binding first (avoids Worker-to-Worker DNS routing issues)
       const response = await _apiService.fetch(new Request(`https://api-internal${path}`));
 
-      // Some deployed service-binding combinations can incorrectly return 404 for valid API routes.
+      // Some local/dev service-binding combinations can return 404/5xx for valid API routes.
       // Fall back to the public API URL so the site still renders instead of going blank.
-      if (response.status !== 404) {
+      if (response.ok) {
         return response;
       }
 
-      console.warn(`Service binding returned 404 for ${path}, falling back to PUBLIC_API_URL`);
+      console.warn(
+        `Service binding returned ${response.status} for ${path}, falling back to PUBLIC_API_URL`
+      );
     } catch (error) {
       console.warn(`Service binding failed for ${path}, falling back to PUBLIC_API_URL`, error);
     }
@@ -178,7 +180,7 @@ export async function getEntryBySlug(slug: string): Promise<Entry | null> {
   if (cached) return cached;
 
   try {
-    const response = await apiFetch(`/api/entries/slug/${slug}`);
+    const response = await apiFetch(`/api/entries/slug/${encodeURIComponent(slug)}`);
     if (!response.ok) {
       console.error(`Entry not found: ${slug}`);
       return null;
@@ -680,6 +682,14 @@ export interface ReadingEntriesResponse {
   error?: string;
 }
 
+export interface ReadingEntryStats {
+  total: number;
+  completed: number;
+  ongoing: number;
+  ok: boolean;
+  error?: string;
+}
+
 /** List all reading entries (sorted by read_at desc by default) */
 export async function getReadingEntries(options?: {
   q?: string;
@@ -743,6 +753,37 @@ export async function getReadingEntriesPage(options?: {
       offset: options?.offset ?? 0,
       ok: false,
       error: '目前暫時無法連到閱讀資料，請稍後再試。',
+    };
+  }
+}
+
+export async function getReadingEntryStats(): Promise<ReadingEntryStats> {
+  try {
+    const response = await apiFetch('/api/reading/stats');
+    if (!response.ok) {
+      return {
+        total: 0,
+        completed: 0,
+        ongoing: 0,
+        ok: false,
+        error: '讀取閱讀統計時發生問題。',
+      };
+    }
+
+    const json = await response.json();
+    return {
+      total: Number(json.data?.total ?? 0),
+      completed: Number(json.data?.completed ?? 0),
+      ongoing: Number(json.data?.ongoing ?? 0),
+      ok: true,
+    };
+  } catch {
+    return {
+      total: 0,
+      completed: 0,
+      ongoing: 0,
+      ok: false,
+      error: '目前暫時無法連到閱讀統計，請稍後再試。',
     };
   }
 }

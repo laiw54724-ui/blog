@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { getReadingEntriesPage } from '../lib/data';
+import { getReadingEntriesPage, getReadingEntryStats } from '../lib/data';
 import {
   GENRE_LABELS,
   MEDIUM_LABELS,
@@ -39,20 +39,10 @@ const {
 
 const {
   total: totalCount,
-  ok: totalCountOk,
-} = await getReadingEntriesPage({ limit: 1, offset: 0 });
-
-const {
-  total: completedCount,
-  ok: completedCountOk,
-} = await getReadingEntriesPage({ read_status: 'completed', limit: 1, offset: 0 });
-
-const {
-  total: ongoingCount,
-  ok: ongoingCountOk,
-} = await getReadingEntriesPage({ read_status: 'ongoing', limit: 1, offset: 0 });
-
-const statsOk = totalCountOk && completedCountOk && ongoingCountOk;
+  completed: completedCount,
+  ongoing: ongoingCount,
+  ok: statsOk,
+} = await getReadingEntryStats();
 
 const totalPages = Math.max(Math.ceil(filteredTotal / pageSize), 1);
 const safePage = Math.min(page, totalPages);

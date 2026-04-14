@@ -13,6 +13,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import {
   listReadingEntries,
   countReadingEntries,
+  getReadingEntryStats,
   getReadingEntryBySlug,
   createReadingEntry,
   updateReadingEntry,
@@ -154,6 +155,11 @@ router.get('/', async (c) => {
   ]);
 
   return c.json({ data: entries, count: entries.length, total, limit, offset });
+});
+
+router.get('/stats', async (c) => {
+  const stats = await getReadingEntryStats(c.env.DB);
+  return c.json({ data: stats });
 });
 
 // ── GET /api/reading/search?q=... ─────────────────────────────────────────────

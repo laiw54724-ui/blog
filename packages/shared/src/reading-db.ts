@@ -51,6 +51,12 @@ export interface ReadingEntryInput {
   source?: string;
 }
 
+export interface ReadingEntryStats {
+  total: number;
+  completed: number;
+  ongoing: number;
+}
+
 /** Generate a unique slug for a reading entry */
 async function ensureUniqueReadingSlug(db: D1Database, baseSlug: string): Promise<string> {
   let slug = baseSlug || 'entry';
@@ -283,4 +289,26 @@ export async function countReadingEntries(
 
   const row = await db.prepare(query).bind(...params).first<{ count: number | string }>();
   return Number(row?.count ?? 0);
+}
+
+export async function getReadingEntryStats(db: D1Database): Promise<ReadingEntryStats> {
+  const row = await db
+    .prepare(
+      `SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN read_status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN read_status = 'ongoing' THEN 1 ELSE 0 END) as ongoing
+      FROM reading_entries`
+    )
+    .first<{
+      total: number | string | null;
+      completed: number | string | null;
+      ongoing: number | string | null;
+    }>();
+
+  return {
+    total: Number(row?.total ?? 0),
+    completed: Number(row?.completed ?? 0),
+    ongoing: Number(row?.ongoing ?? 0),
+  };
 }

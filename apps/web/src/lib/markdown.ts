@@ -27,31 +27,58 @@ export function renderCommentMarkdownSafe(input: string): string {
  * Centralized markdown to HTML conversion
  */
 
-import { unified } from 'unified';
-import { visit } from 'unist-util-visit';
-import remarkParse from 'remark-parse';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import remarkRehype from 'remark-rehype';
-import rehypeKatex from 'rehype-katex';
-import rehypeHighlight from 'rehype-highlight';
-import rehypeRaw from 'rehype-raw';
-import rehypeStringify from 'rehype-stringify';
 import type { Root, Element, Text, Parent, RootContent, ElementContent } from 'hast';
+let markdownRuntimePromise: Promise<{
+  unified: typeof import('unified').unified;
+  remarkParse: typeof import('remark-parse').default;
+  remarkGfm: typeof import('remark-gfm').default;
+  remarkMath: typeof import('remark-math').default;
+  remarkRehype: typeof import('remark-rehype').default;
+  rehypeRaw: typeof import('rehype-raw').default;
+  rehypeKatex: typeof import('rehype-katex').default;
+  rehypeHighlight: typeof import('rehype-highlight').default;
+  rehypeStringify: typeof import('rehype-stringify').default;
+}> | null = null;
 
-// Configure the unified processor
-const processor = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkMath)
-  .use(remarkRehype, { allowDangerousHtml: true })
-  .use(rehypeRaw)
-  .use(rehypeHeadingAnchors)
-  .use(rehypeCallouts)
-  .use(rehypeFigureImages)
-  .use(rehypeKatex)
-  .use(rehypeHighlight, { detect: true, ignoreMissing: true })
-  .use(rehypeStringify);
+async function getMarkdownRuntime() {
+  if (!markdownRuntimePromise) {
+    markdownRuntimePromise = Promise.all([
+      import('unified'),
+      import('remark-parse'),
+      import('remark-gfm'),
+      import('remark-math'),
+      import('remark-rehype'),
+      import('rehype-raw'),
+      import('rehype-katex'),
+      import('rehype-highlight'),
+      import('rehype-stringify'),
+    ]).then(
+      ([
+        unifiedModule,
+        remarkParseModule,
+        remarkGfmModule,
+        remarkMathModule,
+        remarkRehypeModule,
+        rehypeRawModule,
+        rehypeKatexModule,
+        rehypeHighlightModule,
+        rehypeStringifyModule,
+      ]) => ({
+        unified: unifiedModule.unified,
+        remarkParse: remarkParseModule.default,
+        remarkGfm: remarkGfmModule.default,
+        remarkMath: remarkMathModule.default,
+        remarkRehype: remarkRehypeModule.default,
+        rehypeRaw: rehypeRawModule.default,
+        rehypeKatex: rehypeKatexModule.default,
+        rehypeHighlight: rehypeHighlightModule.default,
+        rehypeStringify: rehypeStringifyModule.default,
+      })
+    );
+  }
+
+  return markdownRuntimePromise;
+}
 
 /**
  * Render markdown content to HTML
@@ -69,6 +96,37 @@ export async function renderMarkdownToHtml(markdown: string): Promise<string> {
     }
 
     content = normalizeMarkdownInput(content);
+
+    const runtime = await getMarkdownRuntime();
+    const usesMath = containsMathSyntax(content);
+    const usesCodeHighlight = containsCodeBlockSyntax(content);
+
+    const processor = runtime
+      .unified()
+      .use(runtime.remarkParse)
+      .use(runtime.remarkGfm);
+
+    if (usesMath) {
+      processor.use(runtime.remarkMath);
+    }
+
+    processor
+      .use(runtime.remarkRehype, { allowDangerousHtml: true })
+      .use(runtime.rehypeRaw)
+      .use(rehypeHeadingAnchors)
+      .use(rehypeCallouts)
+      .use(rehypeFigureImages)
+      .use(rehypeTaskListAccessibility);
+
+    if (usesMath) {
+      processor.use(runtime.rehypeKatex);
+    }
+
+    if (usesCodeHighlight) {
+      processor.use(runtime.rehypeHighlight, { detect: true, ignoreMissing: true });
+    }
+
+    processor.use(runtime.rehypeStringify);
 
     const file = await processor.process(content);
     return String(file);
@@ -89,6 +147,11 @@ export function containsMathSyntax(markdown: string): boolean {
     /\\\[([\s\S]+?)\\\]/.test(markdown) ||
     /\\begin\{[a-z*]+\}/.test(markdown)
   );
+}
+
+export function containsCodeBlockSyntax(markdown: string): boolean {
+  if (!markdown || typeof markdown !== 'string') return false;
+  return /(^|\n)(```|~~~)/.test(markdown) || /(^|\n)( {4}|\t)\S/.test(markdown);
 }
 
 /**
@@ -137,11 +200,28 @@ function promoteStandaloneMath(markdown: string): string {
     .join('\n');
 }
 
+function visitElements(
+  node: RootContent | Root,
+  visitor: (node: Element, index: number | undefined, parent: Parent | Root | undefined) => void,
+  index?: number,
+  parent?: Parent | Root
+) {
+  if (node.type === 'element') {
+    visitor(node, index, parent);
+  }
+
+  if (!('children' in node) || !Array.isArray(node.children)) return;
+
+  node.children.forEach((child, childIndex) => {
+    visitElements(child, visitor, childIndex, node as Parent | Root);
+  });
+}
+
 function rehypeHeadingAnchors() {
   return (tree: Root) => {
     const usedIds = new Set<string>();
 
-    visit(tree, 'element', (node: Element) => {
+    visitElements(tree, (node: Element) => {
       if (!node.tagName || !/^h[1-6]$/.test(node.tagName)) return;
       if (!node.children?.length) return;
 
@@ -171,7 +251,7 @@ function isElement(node: ElementContent | RootContent | undefined): node is Elem
 
 function rehypeCallouts() {
   return (tree: Root) => {
-    visit(tree, 'element', (node: Element) => {
+    visitElements(tree, (node: Element) => {
       if (node.tagName !== 'blockquote' || !node.children?.length) return;
 
       const firstChild = node.children[0];
@@ -211,7 +291,7 @@ function rehypeCallouts() {
 
 function rehypeFigureImages() {
   return (tree: Root) => {
-    visit(tree, 'element', (node: Element, index: number | undefined, parent: Parent | undefined) => {
+    visitElements(tree, (node: Element, index: number | undefined, parent: Parent | Root | undefined) => {
       if (!parent || node.tagName !== 'p' || !node.children?.length || typeof index !== 'number') return;
       if (node.children.length !== 1) return;
       const parentChildren = parent.children as RootContent[] | undefined;
@@ -241,6 +321,21 @@ function rehypeFigureImages() {
         },
         ...parentChildren.slice(index + 1),
       ] as RootContent[];
+    });
+  };
+}
+
+function rehypeTaskListAccessibility() {
+  return (tree: Root) => {
+    visitElements(tree, (node: Element) => {
+      if (node.tagName !== 'input') return;
+      if (node.properties?.type !== 'checkbox') return;
+
+      node.properties = {
+        ...(node.properties ?? {}),
+        ariaHidden: 'true',
+        tabIndex: -1,
+      };
     });
   };
 }

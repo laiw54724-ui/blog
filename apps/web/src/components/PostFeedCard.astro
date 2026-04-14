@@ -48,7 +48,15 @@ const hasCover = Boolean(coverUrl)
   <!-- Header: avatar + name + date -->
   <header class="feed-header">
     {avatarUrl ? (
-      <img class="feed-avatar feed-avatar-image" src={avatarUrl} alt={displayName} />
+      <img
+        class="feed-avatar feed-avatar-image"
+        src={avatarUrl}
+        alt={displayName}
+        width="38"
+        height="38"
+        loading="lazy"
+        decoding="async"
+      />
     ) : (
       <div class="feed-avatar" aria-hidden="true">{displayName[0]?.toUpperCase() || 'L'}</div>
     )}
@@ -68,7 +76,15 @@ const hasCover = Boolean(coverUrl)
   {hasCover && (
     <div class="feed-image-wrap">
       <a href={href} class="feed-image-link">
-        <img class="feed-cover" src={coverUrl} alt={coverAlt || ''} loading="lazy" />
+        <img
+          class="feed-cover"
+          src={coverUrl}
+          alt={coverAlt || ''}
+          loading="lazy"
+          decoding="async"
+          width="1200"
+          height="900"
+        />
       </a>
     </div>
   )}

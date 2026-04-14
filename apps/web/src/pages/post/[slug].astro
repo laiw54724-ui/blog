@@ -58,7 +58,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
 
 <BaseLayout title={`${displayTitle} | Double River`} stylesheets={usesKatex ? [katexStylesheetUrl] : []}>
   <ReadingProgress />
-  <ReaderControls client:load />
+  <ReaderControls />
   <article class="post">
 
     <!-- Back nav -->
@@ -113,18 +113,19 @@ applyPageCacheHeaders(Astro.response, 'detail')
         id="clapBtn"
         data-entry-id={entry.id}
         data-api-base={API_BASE}
-        aria-label="拍手"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
         </svg>
+        <span class="engage-label">拍手</span>
         <span id="clapCount">{metrics.clap_count}</span>
       </button>
 
-      <a href="#comments" class="engage-btn" aria-label="留言">
+      <a href="#comments" class="engage-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
+        <span class="engage-label">留言</span>
         <span data-metric="comments">{metrics.comment_count}</span>
       </a>
 
@@ -207,7 +208,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
     gap: 0.75rem;
     margin-bottom: 0.75rem;
     font-size: 0.85rem;
-    color: #999;
+    color: #625d78;
   }
 
   .post-title-wrapper {
@@ -504,6 +505,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
   /* Task lists */
   .markdown-content input[type="checkbox"] {
     margin-right: 0.5rem;
+    pointer-events: none;
   }
 
   /* Footnotes */
@@ -565,7 +567,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
   .hljs-literal,
   .hljs-section,
   .hljs-link {
-    color: #d73a49;
+    color: #a5323f;
   }
 
   .hljs-built_in,
@@ -589,7 +591,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
   .hljs-symbol,
   .hljs-bullet,
   .hljs-addition {
-    color: #22863a;
+    color: #1f6f34;
   }
 
   .hljs-code,
@@ -779,7 +781,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
     border-radius: 999px;
     border: 1px solid #dcd8ee;
     background: rgba(255, 255, 255, 0.75);
-    color: var(--text-muted, #8a88a8);
+    color: #625d78;
     font-size: 0.95rem;
     cursor: pointer;
     text-decoration: none;
@@ -821,7 +823,7 @@ applyPageCacheHeaders(Astro.response, 'detail')
     border: 1px solid #dcd8ee;
     background: rgba(255, 255, 255, 0.75);
     font-size: 0.95rem;
-    color: var(--text-muted, #8a88a8);
+    color: #625d78;
   }
 
   /* ── Comments section ── */

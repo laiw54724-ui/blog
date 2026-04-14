@@ -13,7 +13,6 @@ const {
   description = '貼文留下當下，文章留下價值。',
   ogImage = '/og-default.png',
   canonicalUrl = Astro.url.href,
-  serifFont = false,
   stylesheets = [],
 } = Astro.props
 ---
@@ -25,19 +24,9 @@ const {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <title>{title}</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="canonical" href={canonicalUrl} />
     <link rel="alternate" type="application/rss+xml" title="Double River RSS" href="/rss.xml" />
-
-    {serifFont && (
-      <>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700&display=swap"
-          rel="stylesheet"
-        />
-      </>
-    )}
 
     {stylesheets.map((href) => (
       <link rel="stylesheet" href={href} />
@@ -68,8 +57,8 @@ const {
         --bg: #fcfbf8;
         --surface: #fff;
         --text: #20202a;
-        --text-muted: #8f8bad;
-        --serif: 'Noto Serif TC', Georgia, 'Times New Roman', serif;
+        --text-muted: #625d78;
+        --serif: 'Iowan Old Style', 'Palatino Linotype', 'Noto Serif TC', Georgia, 'Times New Roman', serif;
         --reading-accent: #a85f43;
         --reading-accent-soft: #f6ece6;
         --reading-card: #fffaf6;
@@ -523,8 +512,7 @@ const {
       .footer-tagline {
         font-style: italic;
         letter-spacing: 0.05em;
-        color: var(--accent);
-        opacity: 0.8;
+        color: #4d57b8;
       }
 
       /* ===== 手機版 ===== */
