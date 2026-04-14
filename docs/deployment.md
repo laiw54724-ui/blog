@@ -129,10 +129,12 @@ npx wrangler tail personal-blog-web
 目前前端資料層有 fallback：
 
 - 先走 `API_SERVICE`
-- 如果 service binding 錯誤回 `404`
+- 如果 service binding 回非 `2xx`
 - 再退回 `PUBLIC_API_URL`
 
 所以現在比較不會整站空掉。
+
+不過目前本地 `wrangler dev` 如果接的是空的本地 D1，仍可能因 API 回 `500` 觸發 fallback；這不代表 web 端壞掉，而是本地資料層尚未 seed 完整。
 
 ### 4. 本機 `astro build` / `astro check` 出現 `listen EPERM`
 

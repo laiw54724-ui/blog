@@ -155,7 +155,12 @@ flowchart TD
 - entries / assets / metrics 已有批次 API，便於列表頁擴充
 - profile 已有獨立資料來源
 - `reviews` 系列已可帶入有完整心得的 reading entries
-- environment baseline 已用 `.nvmrc` / `check:node` / CI 對齊
+- environment baseline 已用 `.nvmrc` / `.node-version` / `check:node` 對齊
+
+目前還沒完全收斂的是：
+
+- shell 層的 `fnm current` 與 `node -v` 仍可能不一致
+- CI gate 已落地，但後續仍可再補 branch protection 與更細的 budget / smoke test 檢查
 
 ## 下一階段規劃
 

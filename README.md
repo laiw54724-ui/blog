@@ -19,7 +19,7 @@
   - `/about` — 個人頁（banner / avatar / bio / feed）
   - `/stream` — 貼文河道（load more，每次 10 筆）
   - `/articles` — 文章列表 + 系列入口 + 熱門標籤
-  - `/reading` — 閱讀清單列表（排序 / 篩選 / client-side filter）
+  - `/reading` — 閱讀清單列表（SSR 排序 / 篩選 / URL state）
   - `/reading/[slug]` — 閱讀詳頁（短評 / 文案 / 詳細心得）
   - `/search` — 全文搜尋，支援 `q` / `type` 過濾
   - `/tags` — 結構標籤 / 自由標籤探索
@@ -47,7 +47,7 @@
   - `GET /api/assets/*`
 - UI / UX：
   - Dark mode（跟隨系統）
-  - Noto Serif TC 字型（文章閱讀頁）
+  - 文章閱讀頁使用本地 serif fallback
   - Desktop navbar active state
   - Mobile 浮動 MENU 按鈕 + 回頂部
   - 閱讀進度條（post / article 詳頁）
@@ -63,14 +63,14 @@
   - `npm run lint` — 0 errors
   - `npm test` — 167 tests passed
   - `npm run check:node` — 版本一致性檢查
-  - `apps/api` typecheck 可通過
-  - `apps/web` typecheck 需要在可正常啟動 Cloudflare / Vite plugin 的 Node 22 環境下執行
+  - `npm run typecheck` 可在 Node 22.12.0 通過
+  - 核心公開頁與內容詳頁 Lighthouse 基線已建立
 
 ### 尚未完成或仍在規劃
 
 - `/admin` — 單作者輕後台（草稿管理、狀態篩選）
 - `/map` — 地點 / 旅行地圖瀏覽
-- reading 頁 product 化（URL 化篩選 / 空狀態 / 錯誤狀態 / server-side filter）
+- reading 頁 product 化（空狀態 / 錯誤狀態 / 篩選一致性再收斂）
 - locked tag policy 擴充到更多入口（搜尋 / 系列頁 / 其他詳頁）
 - 貼文升格文章的完整流程
 - AI 流程與 provider 抽象
@@ -115,12 +115,12 @@ docs/
 如果你使用 `fnm`：
 
 ```bash
-eval "$(fnm env --shell zsh)"
-fnm use 22.12.0
+bash ./tools/with-node.sh node -v
 ```
 
-如果 `fnm current` 已經是 `v22.12.0`，但 `node -v` 還是 `v20.x`，表示目前 shell 沒有載入 `fnm env`。
-請把下面這行加到 `~/.zshrc`，然後重開終端機：
+這是目前最穩的 repo 內建入口，因為它會直接用 `fnm exec` 跑 `.nvmrc` 指定版本，不依賴你目前 shell 有沒有先載入 `fnm env`。
+
+如果你還是想直接把 shell 修好，且 `fnm current` 已經是 `v22.12.0`，但 `node -v` 還是 `v20.x`，表示目前 shell 沒有載入 `fnm env`。請把下面這行加到 `~/.zshrc`，然後重開終端機：
 
 ```bash
 eval "$(fnm env --shell zsh)"
@@ -129,18 +129,20 @@ eval "$(fnm env --shell zsh)"
 專案也提供一個快速檢查：
 
 ```bash
-npm run check:node
+bash ./tools/with-node.sh npm run check:node
 ```
 
 ## 常用指令
 
 ```bash
-npm install
-npm run dev:api
-npm run dev:web
-npm run lint
-npm test
-npm run typecheck
+bash ./tools/with-node.sh npm install
+bash ./tools/with-node.sh npm run dev:api
+bash ./tools/with-node.sh npm run dev:web
+bash ./tools/with-node.sh npm run build
+bash ./tools/with-node.sh npm run lint
+bash ./tools/with-node.sh npm test
+bash ./tools/with-node.sh npm run typecheck
+bash ./tools/with-node.sh npm run lighthouse:local
 ```
 
 ## 開發原則

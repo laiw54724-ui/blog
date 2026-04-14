@@ -4,6 +4,11 @@
 
 ## 建議先看
 
+- [status-scorecard.md](/Users/wen/Documents/dev/blog/docs/status-scorecard.md)
+- [performance-baseline.md](/Users/wen/Documents/dev/blog/docs/performance-baseline.md)
+- [lighthouse-baseline.md](/Users/wen/Documents/dev/blog/docs/lighthouse-baseline.md)
+- [release-checklist.md](/Users/wen/Documents/dev/blog/docs/release-checklist.md)
+- [operations.md](/Users/wen/Documents/dev/blog/docs/operations.md)
 - [architecture.md](/Users/wen/Documents/dev/blog/docs/architecture.md)
 - [routes.md](/Users/wen/Documents/dev/blog/docs/routes.md)
 - [api.md](/Users/wen/Documents/dev/blog/docs/api.md)
@@ -15,6 +20,16 @@
 
 - `architecture.md`
   - 產品定位、系統分層、當前資料與未來方向
+- `status-scorecard.md`
+  - 專案實測狀態、評分、效能觀察、下一步路線
+- `performance-baseline.md`
+  - build 體積、主要效能瓶頸、重跑方式與後續追蹤基線
+- `lighthouse-baseline.md`
+  - 頁面實測分數的量測標準、紀錄模板與驗收門檻
+- `release-checklist.md`
+  - 發版前後要確認的固定清單
+- `operations.md`
+  - 本地 / staging / production 的操作流程與 runbook
 - `routes.md`
   - 現在真的有的頁面與 API 路由
 - `api.md`

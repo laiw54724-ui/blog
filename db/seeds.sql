@@ -27,3 +27,71 @@ INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES
   ('entry_demo_post_1', 'tag_coffee'),
   ('entry_demo_article_1', 'tag_travel'),
   ('entry_demo_article_1', 'tag_kyoto');
+
+INSERT OR IGNORE INTO entry_metrics (entry_id, view_count, clap_count, comment_count) VALUES
+  ('entry_demo_post_1', 12, 2, 0),
+  ('entry_demo_article_1', 48, 7, 1);
+
+INSERT OR IGNORE INTO reading_entries (
+  id,
+  slug,
+  title,
+  author,
+  genre,
+  medium,
+  read_status,
+  work_status,
+  score,
+  read_at,
+  short_review,
+  detail_review,
+  blurb,
+  tags,
+  links,
+  has_detail,
+  source,
+  created_at,
+  updated_at
+) VALUES
+  (
+    'reading_demo_1',
+    'demo-reading-1',
+    '昨日的美食',
+    '吉永史',
+    'gen',
+    'manga',
+    'completed',
+    'finished',
+    8.8,
+    '2026-04-01',
+    '節奏很穩，人物關係寫得細，讀完會想慢慢回味。',
+    '這部作品最厲害的地方不是情節反轉，而是它總能用很日常的餐桌場景，把人物真正想說卻說不出口的事慢慢帶出來。',
+    '一部以飲食與人際關係推進情感的作品。',
+    '["reading","food","slice-of-life"]',
+    '[{"label":"出版社","url":"https://example.com/demo-reading-1"}]',
+    1,
+    'manual',
+    '2026-04-01T10:00:00.000Z',
+    '2026-04-01T10:00:00.000Z'
+  ),
+  (
+    'reading_demo_2',
+    'demo-reading-2',
+    '海邊的卡夫卡',
+    '村上春樹',
+    'gen',
+    'novel',
+    'ongoing',
+    'finished',
+    7.9,
+    '2026-04-06',
+    '還在讀，但氛圍感很強，段落之間有一種奇怪的牽引力。',
+    '',
+    '一部帶有寓言感與夢境感的長篇小說。',
+    '["reading","novel"]',
+    '[]',
+    0,
+    'manual',
+    '2026-04-06T10:00:00.000Z',
+    '2026-04-06T10:00:00.000Z'
+  );

@@ -13,12 +13,12 @@
 如果你用 `fnm`：
 
 ```bash
-eval "$(fnm env --shell zsh)"
-fnm use 22.12.0
+bash ./tools/with-node.sh node -v
 ```
 
-如果 `fnm current` 顯示 `v22.12.0`，但 `node -v` 還是 `v20.x`，代表目前 shell 沒有正確載入 `fnm`。
-請把這行加入 `~/.zshrc`，再重開一個終端：
+這是目前最穩的方式，因為它直接使用 repo 內建包裝，不依賴 shell 先載入 `fnm env`。
+
+如果 `fnm current` 顯示 `v22.12.0`，但 `node -v` 還是 `v20.x`，代表目前 shell 沒有正確載入 `fnm`。請把這行加入 `~/.zshrc`，再重開一個終端：
 
 ```bash
 eval "$(fnm env --shell zsh)"
@@ -29,13 +29,13 @@ eval "$(fnm env --shell zsh)"
 ```bash
 fnm current
 node -v
-npm run check:node
+bash ./tools/with-node.sh npm run check:node
 ```
 
 ## 安裝依賴
 
 ```bash
-npm install
+bash ./tools/with-node.sh npm install
 ```
 
 ## 環境變數
@@ -71,19 +71,20 @@ cp .env.example .env.local
 
 ### 1. 建立 D1 database
 
-```bash
-cd apps/api
-wrangler d1 create personal-blog
-wrangler d1 execute personal-blog --file ../../db/schema.sql
-```
-
-如果有額外 migration，再依序執行：
+本地初始化目前建議直接用：
 
 ```bash
-wrangler d1 execute personal-blog --file ../../db/migrate-v2.sql
-wrangler d1 execute personal-blog --file ../../db/migrate-profile.sql
-wrangler d1 execute personal-blog --file ../../db/indices.sql
+bash ./tools/with-node.sh npm run db:local:init
 ```
+
+這會依序套用：
+
+- `db/schema.sql`
+- `db/migrate-v2.sql`
+- `db/migrate-reading.sql`
+- `db/migrate-profile.sql`
+- `db/indices.sql`
+- `db/seeds.sql`
 
 之後更新 [apps/api/wrangler.toml](/Users/wen/Documents/dev/blog/apps/api/wrangler.toml) 中的 `database_id` 與相關 bindings。
 
@@ -98,13 +99,13 @@ npm run register-commands --workspace=apps/api
 ### 啟動 API
 
 ```bash
-npm run dev:api
+bash ./tools/with-node.sh npm run dev:api
 ```
 
 ### 啟動網站
 
 ```bash
-npm run dev:web
+bash ./tools/with-node.sh npm run dev:web
 ```
 
 ### 或分開兩個終端一起跑
@@ -112,13 +113,13 @@ npm run dev:web
 API:
 
 ```bash
-npm run dev:api
+bash ./tools/with-node.sh npm run dev:api
 ```
 
 Web:
 
 ```bash
-npm run dev:web
+bash ./tools/with-node.sh npm run dev:web
 ```
 
 ## 驗證指令
@@ -126,9 +127,9 @@ npm run dev:web
 這三個現在都應該能通過：
 
 ```bash
-npm run lint
-npm test
-npm run typecheck
+bash ./tools/with-node.sh npm run lint
+bash ./tools/with-node.sh npm test
+bash ./tools/with-node.sh npm run typecheck
 ```
 
 ## API 與 Discord
@@ -177,12 +178,13 @@ node -v
 重新註冊：
 
 ```bash
-npm run register-commands --workspace=apps/api
+bash ./tools/with-node.sh npm run register-commands --workspace=apps/api
 ```
 
 ### D1 相關錯誤
 
 - 確認 schema / migration 已執行
+- 本地開發可直接重跑 `bash ./tools/with-node.sh npm run db:local:init`
 - 確認 `wrangler.toml` 內的 D1 binding 與 `database_id` 正確
 
 ### 本機頁面抓不到 API

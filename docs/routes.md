@@ -33,7 +33,7 @@
 
 - 閱讀清單列表
 - 目前支援 genre / medium / read_status / score / read_at 等資料展示
-- 前端可依狀態與條件過濾
+- 目前以 server-rendered filter + URL state 為主
 
 ### `/reading/[slug]`
 
@@ -90,7 +90,7 @@
 
 - 文章詳頁
 - Markdown + KaTeX + code highlighting
-- Noto Serif TC 字型（閱讀排版）
+- 本地 serif fallback（閱讀排版）
 - 閱讀進度條
 - Reader controls（字型大小）
 - 上一篇 / 下一篇導覽

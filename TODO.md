@@ -10,19 +10,30 @@
 環境基線已補：
 - `.nvmrc` / `.node-version` = `22.12.0`
 - `npm run check:node`
-- CI 改為讀 `.nvmrc`
+- 但 shell 的 `fnm current` 與 `node -v` 不一致問題仍待處理
 
 ---
 
 ## 🔴 第 2 週優先
 
+### 基礎穩定性
+
+- [ ] 固定 Node 版本載入方式，解掉 `fnm current` 與 `node -v` 不一致
+- [x] 正式 CI gate：`test` / `typecheck` / `build`
+- [x] 補本地 D1 migration / 最小 seed
+- [ ] 補 deploy 後 smoke tests
+
+### 工作樹整理
+
+- [ ] 把目前未提交的大改切成可審查的小批次 PR
+
 ### reading 功能定稿與產品化
 
 - [ ] 資料模型與欄位定稿
-- [ ] 篩選 / 排序 URL 化
 - [ ] 詳頁與列表關係整理
 - [ ] 空狀態與錯誤狀態整理
-- [ ] 評估 server-side filter / pagination
+- [x] server-side filter / URL state 已落地
+- [ ] pagination / 狀態一致性再收斂
 
 ### 前端效能與資料策略
 
@@ -46,6 +57,18 @@
 - [ ] 決定是否讓 `post` 詳頁也共用密碼保護
 - [ ] 被鎖 tag 的公開呈現規則再收斂
 
+### 測試與驗證
+
+- [ ] `reading` 整合測試
+- [ ] locked access 整合測試
+- [ ] Discord flows 整合測試
+- [ ] Lighthouse budget / 驗收門檻正式化
+
+### 發布穩定度
+
+- [ ] staging 環境定義
+- [ ] migration / rollback / secrets 驗證 runbook 補齊
+
 ### 貼文升格文章
 
 - [ ] Discord 指令 `/升格 slug:xxx`
@@ -58,6 +81,7 @@
 - [ ] 文章 og:image 動態生成（目前用靜態 default）
 - [ ] RSS 描述去除更多 Markdown 語法殘留
 - [ ] 字型與 KaTeX 重資產策略優化
+- [x] markdown / KaTeX 已改為按需載入
 
 ---
 
@@ -72,6 +96,7 @@
 
 ## 發版 Checklist
 
+- [x] `docs/release-checklist.md` 已建立
 - [ ] `npm run lint` 全綠
 - [ ] `npm test` 全綠
 - [ ] `npm run check:node` 通過

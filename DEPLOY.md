@@ -69,11 +69,18 @@ npm run deploy:web
 ## 資料庫 Migration（D1）
 
 ```bash
-cd apps/api
+cd /Users/wen/Documents/dev/blog/apps/api
 
-# 套用 migration 到遠端
+# 依變更內容執行對應 migration
 npx wrangler d1 execute personal-blog --remote --file=../../db/migrate-v2.sql
+npx wrangler d1 execute personal-blog --remote --file=../../db/migrate-reading.sql
+npx wrangler d1 execute personal-blog --remote --file=../../db/migrate-profile.sql
 ```
+
+目前更完整的發布前後操作請改看：
+
+- [docs/release-checklist.md](/Users/wen/Documents/dev/blog/docs/release-checklist.md)
+- [docs/operations.md](/Users/wen/Documents/dev/blog/docs/operations.md)
 
 ---
 
